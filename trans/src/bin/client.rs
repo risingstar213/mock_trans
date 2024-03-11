@@ -13,6 +13,8 @@
 
 use rdma_sys::*;
 use std::{env, process::exit, ptr::null_mut};
+
+#[allow(unused)]
 use errno::{Errno, errno, set_errno};
 
 fn run(ip: &str, port: &str) -> i32 {
