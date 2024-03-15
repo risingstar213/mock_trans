@@ -17,26 +17,26 @@ pub struct AddResponse {
     sum : u8
 }
 
-struct AddRpcProcess<'a> {
-    conn: Arc<RdmaRcConn<'a>>,
+struct AddRpcProcess {
+    // conn: Arc<RdmaRcConn<'a>>,
 }
-impl<'a> RdmaRecvCallback for AddRpcProcess<'a> {
+impl RdmaRecvCallback for AddRpcProcess {
     fn rdma_recv_handler(&self, msg: *mut u8) {
         let req = msg as *mut AddResponse;
         println!("get add response {:}", unsafe { (*req).sum } ) ;
     }
 }
 
-impl<'a> AddRpcProcess<'a> {
-    fn new(conn: &Arc<RdmaRcConn<'a>>) -> Self {
+impl AddRpcProcess {
+    fn new() -> Self {
         Self {
-            conn: conn.clone()
+            // conn: conn.clone()
         }
     }
 }
 
-unsafe impl<'a> Send for AddRpcProcess<'a> {}
-unsafe impl<'a> Sync for AddRpcProcess<'a> {}
+unsafe impl Send for AddRpcProcess {}
+unsafe impl Sync for AddRpcProcess {}
 
 #[inline]
 fn send_req(conn: &Arc<RdmaRcConn>, a: u8, b: u8) {
@@ -51,13 +51,13 @@ fn send_req(conn: &Arc<RdmaRcConn>, a: u8, b: u8) {
 }
 
 fn main() {
-    let mut rdma = RdmaControl::new(0);
+    let rdma = RdmaControl::new(0);
     rdma.connect(1, "10.10.10.9\0", "7472\0").unwrap();
 
     let conn = rdma.get_connection(1);
     conn.init_for_recvs().unwrap();
 
-    let process = Arc::new(AddRpcProcess::new(&conn));
+    let process = Arc::new(AddRpcProcess::new());
     conn.register_recv_callback( &process).unwrap();
 
     let conn_clone = conn.clone();

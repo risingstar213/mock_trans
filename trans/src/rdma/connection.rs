@@ -18,36 +18,35 @@ struct RdmaRcMeta {
     rid: u32,
 }
 
-struct RdmaElement<'a> {
-    recv_head: u64, 
+struct RdmaElement {
+    recv_head:     u64, 
     idle_recv_num: u64,
-    rsges: [ibv_sge; MAX_RECV_SIZE],
-    rwrs: [ibv_recv_wr; MAX_RECV_SIZE],
-    rwcs: [ibv_wc; MAX_RECV_SIZE],
-    ssges: [ibv_sge; MAX_DOORBELL_SEND_SIZE],
-    swrs: [ibv_send_wr; MAX_DOORBELL_SEND_SIZE],
-    handler: Weak<dyn RdmaRecvCallback + Send + Sync + 'a>,
+    rsges:         [ibv_sge; MAX_RECV_SIZE],
+    rwrs:          [ibv_recv_wr; MAX_RECV_SIZE],
+    rwcs:          [ibv_wc; MAX_RECV_SIZE],
+    ssges:         [ibv_sge; MAX_DOORBELL_SEND_SIZE],
+    swrs:          [ibv_send_wr; MAX_DOORBELL_SEND_SIZE],
 }
 
-impl<'a> Default for RdmaElement<'a> {
+impl Default for RdmaElement {
     fn default() -> Self {
         Self {
-            recv_head : 0,
+            recv_head :    0,
             idle_recv_num: 0,
-            rsges: unsafe { std::mem::zeroed() },
-            rwrs: unsafe { std::mem::zeroed() },
-            rwcs: unsafe { std::mem::zeroed() },
-            ssges: unsafe { std::mem::zeroed() },
-            swrs: unsafe { std::mem::zeroed() },
-            handler: Arc::downgrade(&DEFAULT_RDMA_RECV_HANDLER) as _
+            rsges:         unsafe { std::mem::zeroed() },
+            rwrs:          unsafe { std::mem::zeroed() },
+            rwcs:          unsafe { std::mem::zeroed() },
+            ssges:         unsafe { std::mem::zeroed() },
+            swrs:          unsafe { std::mem::zeroed() },
         }
     }
 }
 
 pub struct RdmaRcConn<'a> {
-    meta: RdmaRcMeta,
+    meta:      RdmaRcMeta,
     allocator: LockedHeap,
-    elements: Mutex<RdmaElement<'a>>
+    elements:  Mutex<RdmaElement>,
+    handler:   Mutex<Weak<dyn RdmaRecvCallback + Send + Sync + 'a>>
 }
 
 unsafe impl<'a> Send for RdmaRcConn<'a> {}
@@ -58,18 +57,19 @@ impl<'a> RdmaRcConn<'a> {
     pub fn new(id: *mut rdma_cm_id, lm: *mut u8, lmr: *mut ibv_mr, raddr: u64, rid: u32) -> Self {
         let meta = RdmaRcMeta {
             conn_id: id,
-            lm: lm,
-            lmr: lmr,
-            raddr: raddr,
-            rid: rid,
+            lm:      lm,
+            lmr:     lmr,
+            raddr:   raddr,
+            rid:     rid,
         };
 
         let allocator = unsafe { LockedHeap::new(lm, (NPAGES * 4096) as usize) };
 
         Self {
-            meta: meta,
+            meta:      meta,
             allocator: allocator,
-            elements: Mutex::new(RdmaElement::default())
+            elements:  Mutex::new(RdmaElement::default()),
+            handler:   Mutex::new(Arc::downgrade(&DEFAULT_RDMA_RECV_HANDLER) as _),
         }
     }
 
@@ -104,7 +104,7 @@ impl<'a> RdmaRcConn<'a> {
     }
 
     pub fn register_recv_callback(&self, handler: &Arc<impl RdmaRecvCallback + Send + Sync + 'a>) -> TransResult<()> {
-        self.elements.lock().unwrap().handler = Arc::downgrade( handler) as _;
+        *self.handler.lock().unwrap() = Arc::downgrade( handler) as _;
         Ok(())
     }
 
@@ -190,7 +190,7 @@ impl<'a> RdmaRcConn<'a> {
         let mut wc: ibv_wc = unsafe { std::mem::zeroed() };
         let mut poll_result = unsafe { 
             ibv_poll_cq(
-            unsafe { (*self.meta.conn_id).recv_cq },
+            (*self.meta.conn_id).recv_cq,
             1,
             &mut wc as *mut _,
             )
@@ -198,7 +198,7 @@ impl<'a> RdmaRcConn<'a> {
         if poll_result == 0 {
             poll_result = unsafe { 
                 ibv_poll_cq(
-                unsafe { (*self.meta.conn_id).send_cq },
+                (*self.meta.conn_id).send_cq,
                 1,
                 &mut wc as *mut _,
                 )
@@ -207,7 +207,6 @@ impl<'a> RdmaRcConn<'a> {
 
         if poll_result > 0 {
             println!("poll one result  {}:{}", wc.opcode, wc.status);
-            let elements = self.elements.lock().unwrap();
             match wc.opcode {
                 ibv_wc_opcode::IBV_WC_SEND => {
                     // println!("into send");
@@ -215,7 +214,7 @@ impl<'a> RdmaRcConn<'a> {
                 ibv_wc_opcode::IBV_WC_RECV => {
                     // println!("into recv");
                     let addr = wc.wr_id as *mut u8;
-                    elements.handler.upgrade().unwrap().rdma_recv_handler(addr);
+                    self.handler.lock().unwrap().upgrade().unwrap().rdma_recv_handler(addr);
                 },
                 _ => {
                     unimplemented!();
@@ -253,4 +252,8 @@ impl<'a> Drop for RdmaRcConn<'a> {
         }
 
     }
+}
+
+pub struct RdmaUdConn {
+
 }

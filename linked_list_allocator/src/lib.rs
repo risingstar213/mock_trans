@@ -331,7 +331,7 @@ impl Deref for LockedHeap {
 
 #[cfg(feature = "use_spin")]
 impl LockedHeap {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+    pub unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         self.0
             .lock()
             .unwrap()
@@ -340,7 +340,7 @@ impl LockedHeap {
             .map_or(core::ptr::null_mut(), |allocation| allocation.as_ptr())
     }
 
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+    pub unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
         self.0
             .lock()
             .unwrap()
