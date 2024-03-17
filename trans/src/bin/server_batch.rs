@@ -3,8 +3,9 @@ use std::sync::Mutex;
 
 use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;
 use trans::rdma::control::RdmaControl;
-use trans::rdma::connection::RdmaRcConn;
+use trans::rdma::rcconn::RdmaRcConn;
 use trans::rdma::RdmaRecvCallback;
+use trans::rdma::two_sides::TwoSidesComm;
 
 use rdma_sys::*;
 

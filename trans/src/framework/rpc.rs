@@ -1,3 +1,3 @@
-struct AsyncRpc {
+pub struct AsyncRpc {
     
 }

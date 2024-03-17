@@ -5,7 +5,7 @@ use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;
 
 use trans::rdma::control::RdmaControl;
 use trans::rdma::RdmaRecvCallback;
-use trans::rdma::connection::RdmaRcConn;
+use trans::rdma::rcconn::RdmaRcConn;
 
 
 pub struct AddRequest {

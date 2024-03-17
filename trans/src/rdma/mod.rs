@@ -1,5 +1,7 @@
 pub mod control;
-pub mod connection;
+pub mod one_side;
+pub mod two_sides;
+pub mod rcconn;
 use lazy_static::lazy_static;
 use std::sync::Arc;
 
@@ -11,6 +13,7 @@ pub trait RdmaRecvCallback {
 struct DefaultRdmaRecvCallback;
 
 impl RdmaRecvCallback for DefaultRdmaRecvCallback {
+    #![allow(unused_variables)]
     fn rdma_recv_handler(&self, msg: *mut u8) {
         unimplemented!("rdma recv callback");
     }
@@ -28,6 +31,7 @@ pub trait RdmaSendCallback {
 struct DefaultRdmaSendCallback;
 
 impl RdmaSendCallback for DefaultRdmaSendCallback {
+    #![allow(unused_variables)]
     fn rdma_send_handler(&self, wr_id: u64) {
         unimplemented!("rdma send callback");
     }

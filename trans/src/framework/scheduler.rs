@@ -3,12 +3,14 @@ use std::sync::Mutex;
 use std::collections::HashMap;
 
 use crate::rdma::RdmaRecvCallback;
-use crate::rdma::connection::RdmaRcConn;
+use crate::rdma::rcconn::RdmaRcConn;
+
+use super::rpc::AsyncRpc;
 
 // process send / read / write saparately 
 // because send does not require polling but read / write need
 
-struct AsyncScheduler<'a> {
+pub struct AsyncScheduler<'a> {
     conns:    Mutex<HashMap<u64, Arc<RdmaRcConn<'a>>>>,
     // pendings: Mutex<HashMap<u64, u64>>,
 }

@@ -7,7 +7,7 @@ use rdma_sys::*;
 use errno::errno;
 
 
-use super::connection::{RdmaRcConn};
+use super::rcconn::{RdmaRcConn};
 
 use crate::{PORTs, TransError, TransResult, MAX_RECV_SIZE, MAX_SEND_SIZE, NPAGES, PEERNUMS};
 

@@ -10,6 +10,7 @@ use ll_alloc::LockedHeap;
 use crate::*;
 use super::{RdmaRecvCallback, RdmaSendCallback};
 use super::{DEFAULT_RDMA_RECV_HANDLER, DEFAULT_RDMA_SEND_HANDLER};
+use super::{one_side::OneSideComm, two_sides::TwoSidesComm};
 
 struct RdmaRcMeta {
     conn_id: *mut rdma_cm_id,
@@ -175,33 +176,6 @@ impl<'a> RdmaRcConn<'a> {
         Ok(())
     }
 
-    // for read / write primitives
-    // read / write has no response, so the batch sending must be controlled by apps
-    // the last must be send signaled
-    pub fn post_batch(
-        &self,
-        send_wr: *mut ibv_send_wr,
-        num: u64,
-    ) -> TransResult<()> {
-        // dangerous!!!
-        let mut elements = self.elements.lock().unwrap();
-        // update meta
-        elements.high_watermark += num;
-        elements.pending_sends = 0;
-
-        let mut bad_wr: *mut ibv_send_wr = std::ptr::null_mut();
-        let ret = unsafe {
-            ibv_post_send((*self.meta.conn_id).qp, send_wr,  &mut bad_wr as *mut _)
-        };
-
-        if ret != 0 {
-            return Err(TransError::TransRdmaError);
-        }
-        drop(elements);
-        self.poll_in_need();
-        Ok(())
-    }
-
     // for send primitives
     pub fn flush_pending_with_signal(&self, force_signal: bool) -> TransResult<()> {
         let mut bad_wr: *mut ibv_send_wr = std::ptr::null_mut();
@@ -241,32 +215,6 @@ impl<'a> RdmaRcConn<'a> {
         
         if self.need_poll() {
             self.poll_until_complete();
-        }
-        Ok(())
-    }
-
-    // for send primitives
-    #[inline]
-    pub fn flush_pending(&self) -> TransResult<()> {
-        return self.flush_pending_with_signal(false);
-    }
-
-    // for send primitives
-    pub fn send_pending(&self, msg: *mut u8, length: u32) -> TransResult<()> {
-        let mut elements = self.elements.lock().unwrap();
-        let current_idx = elements.current_idx as usize;
-        // update metas
-        elements.current_idx += 1;
-
-        elements.ssges[current_idx].addr   = msg as _;
-        elements.ssges[current_idx].length = length;
-
-        // TODO: IBV_SEND_INLINE
-        elements.swrs[current_idx].send_flags = 0;
-
-        drop(elements);
-        if current_idx+1 == MAX_DOORBELL_SEND_SIZE {
-            return self.flush_pending();
         }
         Ok(())
     }
@@ -454,6 +402,63 @@ impl<'a> RdmaRcConn<'a> {
         unsafe { self.allocator.dealloc(addr, layout); }
     }
 
+}
+
+impl<'a> OneSideComm for RdmaRcConn<'a> {
+    // for read / write primitives
+    // read / write has no response, so the batch sending must be controlled by apps
+    // the last must be send signaled
+    fn post_batch(
+        &self,
+        send_wr: *mut ibv_send_wr,
+        num: u64,
+    ) -> TransResult<()> {
+        // dangerous!!!
+        let mut elements = self.elements.lock().unwrap();
+        // update meta
+        elements.high_watermark += num;
+        elements.pending_sends = 0;
+
+        let mut bad_wr: *mut ibv_send_wr = std::ptr::null_mut();
+        let ret = unsafe {
+            ibv_post_send((*self.meta.conn_id).qp, send_wr,  &mut bad_wr as *mut _)
+        };
+
+        if ret != 0 {
+            return Err(TransError::TransRdmaError);
+        }
+        drop(elements);
+        self.poll_in_need();
+        Ok(())
+    }
+}
+
+impl<'a> TwoSidesComm for RdmaRcConn<'a> {
+    // for send primitives
+    #[inline]
+    fn flush_pending(&self) -> TransResult<()> {
+        return self.flush_pending_with_signal(false);
+    }
+
+    // for send primitives
+    fn send_pending(&self, msg: *mut u8, length: u32) -> TransResult<()> {
+        let mut elements = self.elements.lock().unwrap();
+        let current_idx = elements.current_idx as usize;
+        // update metas
+        elements.current_idx += 1;
+
+        elements.ssges[current_idx].addr   = msg as _;
+        elements.ssges[current_idx].length = length;
+
+        // TODO: IBV_SEND_INLINE
+        elements.swrs[current_idx].send_flags = 0;
+
+        drop(elements);
+        if current_idx+1 == MAX_DOORBELL_SEND_SIZE {
+            return self.flush_pending();
+        }
+        Ok(())
+    }
 }
 
 impl<'a> Drop for RdmaRcConn<'a> {

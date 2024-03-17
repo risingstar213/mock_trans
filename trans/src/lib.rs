@@ -1,7 +1,9 @@
 pub mod common;
-pub mod context;
 pub mod rdma;
+pub mod doca_dma;
 pub mod framework;
+pub mod memstore;
+pub mod occ;
 
 #[allow(unused)]
 #[derive(Debug)]
