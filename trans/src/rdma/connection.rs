@@ -1,8 +1,9 @@
 use std::alloc::Layout;
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 use std::sync::{Arc, Weak};
 
 use libc::free;
+use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;
 use rdma_sys::*;
 use ll_alloc::LockedHeap;
 
@@ -24,6 +25,11 @@ struct RdmaElement {
     rsges:         [ibv_sge; MAX_RECV_SIZE],
     rwrs:          [ibv_recv_wr; MAX_RECV_SIZE],
     rwcs:          [ibv_wc; MAX_RECV_SIZE],
+    low_watermark: u64, // number of msgs need to poll
+    high_watermark: u64,
+    // for send primitives, (TODO: using ud qpairs for two-side primitives)
+    current_idx:   u64,
+    pending_sends: u64,
     ssges:         [ibv_sge; MAX_DOORBELL_SEND_SIZE],
     swrs:          [ibv_send_wr; MAX_DOORBELL_SEND_SIZE],
 }
@@ -31,11 +37,15 @@ struct RdmaElement {
 impl Default for RdmaElement {
     fn default() -> Self {
         Self {
-            recv_head :    0,
-            idle_recv_num: 0,
-            rsges:         unsafe { std::mem::zeroed() },
-            rwrs:          unsafe { std::mem::zeroed() },
-            rwcs:          unsafe { std::mem::zeroed() },
+            recv_head :     0,
+            idle_recv_num:  0,
+            rsges:          unsafe { std::mem::zeroed() },
+            rwrs:           unsafe { std::mem::zeroed() },
+            rwcs:           unsafe { std::mem::zeroed() },
+            low_watermark:  0,
+            high_watermark: 0,
+            current_idx:    0,
+            pending_sends:  0,
             ssges:         unsafe { std::mem::zeroed() },
             swrs:          unsafe { std::mem::zeroed() },
         }
@@ -73,7 +83,7 @@ impl<'a> RdmaRcConn<'a> {
         }
     }
 
-    pub fn init_for_recvs(&self) -> TransResult<()>  {
+    pub fn init_and_start_recvs(&self) -> TransResult<()>  {
         let mut elements = self.elements.lock().unwrap();
         for i in 0..MAX_RECV_SIZE {
             let addr = self.alloc_mr(MAX_PACKET_SIZE).unwrap() as u64;
@@ -96,6 +106,21 @@ impl<'a> RdmaRcConn<'a> {
                 num_sge: 1,
             };
         }
+
+        for i in 0..MAX_DOORBELL_SEND_SIZE {
+            elements.ssges[i].lkey   = unsafe { (*self.meta.lmr).lkey };
+
+            elements.swrs[i].wr_id   = 0;
+            elements.swrs[i].opcode  = IBV_WR_SEND;
+            elements.swrs[i].num_sge = 1;
+            let next = if i+1 == MAX_DOORBELL_SEND_SIZE {
+                std::ptr::null_mut()
+            } else {
+                &mut elements.swrs[i+1] as *mut _
+            };
+            elements.swrs[i].next = next;
+            elements.swrs[i].sg_list = &mut elements.ssges[i] as *mut _;
+        }
         // not recursive loc, need drop
         drop(elements);
 
@@ -108,6 +133,8 @@ impl<'a> RdmaRcConn<'a> {
         Ok(())
     }
 
+    // (deprecated) raw send request for test
+    #[deprecated]
     pub fn post_send(
         &self,
         wr_op: std::os::raw::c_uint, 
@@ -148,6 +175,110 @@ impl<'a> RdmaRcConn<'a> {
         }
 
         Ok(())
+    }
+
+    // for read / write primitives
+    // read / write has no response, so the batch sending must be controlled by apps
+    // the last must be send signaled
+    pub fn post_batch(
+        &self,
+        send_wr: *mut ibv_send_wr,
+        num: u64,
+    ) -> TransResult<()> {
+        // dangerous!!!
+        let mut element = self.elements.lock().unwrap();
+        // update meta
+        element.high_watermark += num;
+        element.pending_sends = 0;
+
+        let mut bad_wr: *mut ibv_send_wr = std::ptr::null_mut();
+        let ret = unsafe {
+            ibv_post_send((*self.meta.conn_id).qp, send_wr,  &mut bad_wr as *mut _)
+        };
+
+        if ret != 0 {
+            return Err(TransError::TransRdmaError);
+        }
+        
+        Ok(())
+    }
+
+    // for send primitives
+    pub fn flush_pending(&self) -> TransResult<()> {
+        let mut bad_wr: *mut ibv_send_wr = std::ptr::null_mut();
+        let mut elements = self.elements.lock().unwrap();
+        let current_idx = elements.current_idx;
+        let need_signal = Self::need_signals_for_pending(&elements);
+        if current_idx > 0 {
+            // update metas
+            elements.current_idx     = 0;
+            elements.high_watermark += current_idx;
+            if need_signal {
+                elements.pending_sends = 0;
+            } else {
+                elements.pending_sends += current_idx;
+            }
+
+            elements.swrs[(current_idx-1) as usize].next = std::ptr::null_mut();
+            if need_signal {
+                elements.swrs[(current_idx-1) as usize].send_flags |= ibv_send_flags::IBV_SEND_SIGNALED.0;
+                elements.swrs[(current_idx-1) as usize].wr_id = elements.high_watermark << WRID_RESERVE_BITS; // for polling
+            }
+            let ret = unsafe {
+                ibv_post_send((*self.meta.conn_id).qp, &mut elements.swrs[0] as *mut _, &mut bad_wr as *mut _)
+            };
+
+            elements.swrs[(current_idx-1) as usize].next = 
+                &mut elements.swrs[current_idx as usize] as *mut _;
+
+            if ret != 0 {
+                return Err(TransError::TransRdmaError);
+            }
+        }
+        Ok(())
+    }
+
+    // for send primitives
+    pub fn send_pending(&self, msg: *mut u8, length: u32) -> TransResult<()> {
+        let mut elements = self.elements.lock().unwrap();
+        let current_idx = elements.current_idx as usize;
+        // update metas
+        elements.current_idx += 1;
+
+        elements.ssges[current_idx].addr   = msg as _;
+        elements.ssges[current_idx].length = length;
+
+        // TODO: IBV_SEND_INLINE
+        elements.swrs[current_idx].send_flags = 0;
+
+        drop(elements);
+        if current_idx+1 == MAX_DOORBELL_SEND_SIZE {
+            return self.flush_pending();
+        }
+        Ok(())
+    }
+
+    // signals for sending pending
+    #[inline]
+    fn need_signals_for_pending(elements: &MutexGuard<RdmaElement>) -> bool {
+        (elements.pending_sends + elements.current_idx) >= MAX_SIGNAL_PENDINGS as _
+    }
+
+    #[inline]
+    pub fn set_low_watermark(&self, low_watermark: u64) {
+        let mut elements = self.elements.lock().unwrap();
+        elements.low_watermark = low_watermark;
+    }
+
+    #[inline]
+    pub fn get_high_watermark(&self) -> u64 {
+        return self.elements.lock().unwrap().high_watermark;
+    }
+
+    #[inline]
+    pub fn need_poll(&self) -> bool {
+        let elements = self.elements.lock().unwrap();
+        (elements.high_watermark - elements.low_watermark) >= (MAX_SEND_SIZE / 2) as u64
     }
 
     // batch recv
@@ -206,7 +337,7 @@ impl<'a> RdmaRcConn<'a> {
         }
 
         if poll_result > 0 {
-            println!("poll one result  {}:{}", wc.opcode, wc.status);
+            // println!("poll one result  {}:{}", wc.opcode, wc.status);
             match wc.opcode {
                 ibv_wc_opcode::IBV_WC_SEND => {
                     // println!("into send");
@@ -252,8 +383,4 @@ impl<'a> Drop for RdmaRcConn<'a> {
         }
 
     }
-}
-
-pub struct RdmaUdConn {
-
 }

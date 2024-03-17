@@ -46,7 +46,7 @@ fn send_req(conn: &Arc<RdmaRcConn>, a: u8, b: u8) {
             (*(addr as *mut AddRequest)).a = a;
             (*(addr as *mut AddRequest)).b = b;
         }
-        conn.post_send(IBV_WR_SEND, addr, size as _, 0, 2, addr as _, 0).unwrap();
+        conn.post_send(IBV_WR_SEND, addr, size as _, 0, 2, 0, 0).unwrap();
         println!("send req {:} {:}", a, b);
 }
 
@@ -55,7 +55,7 @@ fn main() {
     rdma.connect(1, "10.10.10.9\0", "7472\0").unwrap();
 
     let conn = rdma.get_connection(1);
-    conn.init_for_recvs().unwrap();
+    conn.init_and_start_recvs().unwrap();
 
     let process = Arc::new(AddRpcProcess::new());
     conn.register_recv_callback( &process).unwrap();

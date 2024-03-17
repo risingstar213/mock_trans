@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::sync::Mutex;
 
 use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;
 use trans::rdma::control::RdmaControl;
@@ -32,7 +33,7 @@ impl<'a> RdmaRecvCallback for AddRpcProcess<'a> {
             (*(addr as *mut AddResponse)).sum = a + b;
         }
         
-        self.conn.post_send(IBV_WR_SEND, addr, size as _, 0, 2, addr as _, 0).unwrap();
+        self.conn.post_send(IBV_WR_SEND, addr, size as _, 0, 2, 0, 0).unwrap();
     }
 }
 
@@ -53,7 +54,7 @@ fn main() {
     rdma.listen_task();
 
     let conn = rdma.get_connection(0);
-    conn.init_for_recvs().unwrap();
+    conn.init_and_start_recvs().unwrap();
 
     let process = Arc::new(AddRpcProcess::new(&conn));
     conn.register_recv_callback( &process).unwrap();
