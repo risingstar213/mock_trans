@@ -46,7 +46,7 @@ fn send_req(conn: &Arc<RdmaRcConn>, a: u8, b: u8) {
             (*(addr as *mut AddRequest)).a = a;
             (*(addr as *mut AddRequest)).b = b;
         }
-        conn.post_send(IBV_WR_SEND, addr, size as _, 0, 2, 0, 0).unwrap();
+        conn.send_pending(addr, size as _).unwrap();
         println!("send req {:} {:}", a, b);
 }
 
@@ -64,22 +64,27 @@ fn main() {
     let th = thread::spawn(move || {
         let mut num = 0_i32;
         loop {
-            let n = conn_clone.poll_comps();
+            let n = conn_clone.poll_recvs();
             if n > 0 {
                 num = num + n;
                 // println!("n {:} , num {:}", n,  num);
             }
-            if num >= 4 {
+            if num >= 36 {
                 println!("break");
                 break;
             }
         }
     });
 
-    send_req(&conn, 2, 7);
+    // send_req(&conn, 2, 7);
+    // send_req(&conn, 9, 11);
+    // send_req(&conn, 123, 78);
 
-    // unsafe { sleep(2); }
-    send_req(&conn, 9, 11);
+    for i in 0..36 {
+        send_req(&conn, i, i + 5);
+    }
+
+    conn.flush_pending_with_signal(true).unwrap();
 
     th.join().unwrap();
 

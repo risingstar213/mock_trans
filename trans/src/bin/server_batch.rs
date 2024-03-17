@@ -33,7 +33,7 @@ impl<'a> RdmaRecvCallback for AddRpcProcess<'a> {
             (*(addr as *mut AddResponse)).sum = a + b;
         }
         
-        self.conn.post_send(IBV_WR_SEND, addr, size as _, 0, 2, 0, 0).unwrap();
+        self.conn.send_pending(addr, size as _).unwrap();
     }
 }
 
@@ -61,14 +61,16 @@ fn main() {
 
     let mut num = 0_i32;
     loop {
-        let n = conn.poll_comps();
+        let n = conn.poll_recvs();
         if n > 0 {
             num = num + n;
             // println!("n {:} , num {:}", n,  num);
         }
-        if num >= 4 {
+        if num >= 36 {
             println!("break");
             break;
         }
     }
+
+    // conn.flush_pending_with_signal(true).unwrap();
 }

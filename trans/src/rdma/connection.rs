@@ -8,8 +8,8 @@ use rdma_sys::*;
 use ll_alloc::LockedHeap;
 
 use crate::*;
-use super::RdmaRecvCallback;
-use super::DEFAULT_RDMA_RECV_HANDLER;
+use super::{RdmaRecvCallback, RdmaSendCallback};
+use super::{DEFAULT_RDMA_RECV_HANDLER, DEFAULT_RDMA_SEND_HANDLER};
 
 struct RdmaRcMeta {
     conn_id: *mut rdma_cm_id,
@@ -21,10 +21,8 @@ struct RdmaRcMeta {
 
 struct RdmaElement {
     recv_head:     u64, 
-    idle_recv_num: u64,
     rsges:         [ibv_sge; MAX_RECV_SIZE],
     rwrs:          [ibv_recv_wr; MAX_RECV_SIZE],
-    rwcs:          [ibv_wc; MAX_RECV_SIZE],
     low_watermark: u64, // number of msgs need to poll
     high_watermark: u64,
     // for send primitives, (TODO: using ud qpairs for two-side primitives)
@@ -38,10 +36,8 @@ impl Default for RdmaElement {
     fn default() -> Self {
         Self {
             recv_head :     0,
-            idle_recv_num:  0,
             rsges:          unsafe { std::mem::zeroed() },
             rwrs:           unsafe { std::mem::zeroed() },
-            rwcs:           unsafe { std::mem::zeroed() },
             low_watermark:  0,
             high_watermark: 0,
             current_idx:    0,
@@ -56,7 +52,8 @@ pub struct RdmaRcConn<'a> {
     meta:      RdmaRcMeta,
     allocator: LockedHeap,
     elements:  Mutex<RdmaElement>,
-    handler:   Mutex<Weak<dyn RdmaRecvCallback + Send + Sync + 'a>>
+    rhandler:  Mutex<Weak<dyn RdmaRecvCallback + Send + Sync + 'a>>,
+    whandler:  Mutex<Weak<dyn RdmaSendCallback + Send + Sync + 'a>>
 }
 
 unsafe impl<'a> Send for RdmaRcConn<'a> {}
@@ -79,7 +76,8 @@ impl<'a> RdmaRcConn<'a> {
             meta:      meta,
             allocator: allocator,
             elements:  Mutex::new(RdmaElement::default()),
-            handler:   Mutex::new(Arc::downgrade(&DEFAULT_RDMA_RECV_HANDLER) as _),
+            rhandler:  Mutex::new(Arc::downgrade(&DEFAULT_RDMA_RECV_HANDLER) as _),
+            whandler:  Mutex::new(Arc::downgrade(&DEFAULT_RDMA_SEND_HANDLER) as _)
         }
     }
 
@@ -129,7 +127,7 @@ impl<'a> RdmaRcConn<'a> {
     }
 
     pub fn register_recv_callback(&self, handler: &Arc<impl RdmaRecvCallback + Send + Sync + 'a>) -> TransResult<()> {
-        *self.handler.lock().unwrap() = Arc::downgrade( handler) as _;
+        *self.rhandler.lock().unwrap() = Arc::downgrade( handler) as _;
         Ok(())
     }
 
@@ -186,10 +184,10 @@ impl<'a> RdmaRcConn<'a> {
         num: u64,
     ) -> TransResult<()> {
         // dangerous!!!
-        let mut element = self.elements.lock().unwrap();
+        let mut elements = self.elements.lock().unwrap();
         // update meta
-        element.high_watermark += num;
-        element.pending_sends = 0;
+        elements.high_watermark += num;
+        elements.pending_sends = 0;
 
         let mut bad_wr: *mut ibv_send_wr = std::ptr::null_mut();
         let ret = unsafe {
@@ -199,16 +197,17 @@ impl<'a> RdmaRcConn<'a> {
         if ret != 0 {
             return Err(TransError::TransRdmaError);
         }
-        
+        drop(elements);
+        self.poll_in_need();
         Ok(())
     }
 
     // for send primitives
-    pub fn flush_pending(&self) -> TransResult<()> {
+    pub fn flush_pending_with_signal(&self, force_signal: bool) -> TransResult<()> {
         let mut bad_wr: *mut ibv_send_wr = std::ptr::null_mut();
         let mut elements = self.elements.lock().unwrap();
         let current_idx = elements.current_idx;
-        let need_signal = Self::need_signals_for_pending(&elements);
+        let need_signal = Self::need_signals_for_pending(&elements) || force_signal;
         if current_idx > 0 {
             // update metas
             elements.current_idx     = 0;
@@ -228,14 +227,28 @@ impl<'a> RdmaRcConn<'a> {
                 ibv_post_send((*self.meta.conn_id).qp, &mut elements.swrs[0] as *mut _, &mut bad_wr as *mut _)
             };
 
-            elements.swrs[(current_idx-1) as usize].next = 
-                &mut elements.swrs[current_idx as usize] as *mut _;
+            if current_idx < MAX_DOORBELL_SEND_SIZE as _ {
+                elements.swrs[(current_idx-1) as usize].next = 
+                    &mut elements.swrs[current_idx as usize] as *mut _;
+            }
 
             if ret != 0 {
                 return Err(TransError::TransRdmaError);
             }
         }
+
+        drop(elements);
+        
+        if self.need_poll() {
+            self.poll_until_complete();
+        }
         Ok(())
+    }
+
+    // for send primitives
+    #[inline]
+    pub fn flush_pending(&self) -> TransResult<()> {
+        return self.flush_pending_with_signal(false);
     }
 
     // for send primitives
@@ -264,11 +277,11 @@ impl<'a> RdmaRcConn<'a> {
         (elements.pending_sends + elements.current_idx) >= MAX_SIGNAL_PENDINGS as _
     }
 
-    #[inline]
-    pub fn set_low_watermark(&self, low_watermark: u64) {
-        let mut elements = self.elements.lock().unwrap();
-        elements.low_watermark = low_watermark;
-    }
+    // #[inline]
+    // pub fn set_low_watermark(&self, low_watermark: u64) {
+    //     let mut elements = self.elements.lock().unwrap();
+    //     elements.low_watermark = low_watermark;
+    // }
 
     #[inline]
     pub fn get_high_watermark(&self) -> u64 {
@@ -317,6 +330,75 @@ impl<'a> RdmaRcConn<'a> {
         Ok(())
     }
 
+    pub fn poll_recvs(&self) -> i32 {
+        let mut rwcs: [ibv_wc; MAX_RECV_SIZE] = unsafe { std::mem::zeroed() };
+        let poll_result = unsafe { 
+            ibv_poll_cq(
+            (*self.meta.conn_id).recv_cq,
+            MAX_RECV_SIZE  as _,
+            &mut rwcs as *mut _,
+            )
+        };
+        for i in 0..poll_result as usize {
+            let addr = rwcs[i].wr_id as *mut u8;
+            self.rhandler.lock().unwrap().upgrade().unwrap().rdma_recv_handler(addr);
+        }
+        self.flush_pending().unwrap();
+
+        if poll_result > 0 {
+            self.post_recvs(poll_result as _).unwrap();
+        }
+
+        // elements
+        poll_result
+    }
+
+    pub fn poll_send(&self) -> i32 {
+        let mut wc: ibv_wc = unsafe { std::mem::zeroed() };
+        let poll_result = unsafe {
+            ibv_poll_cq(
+                (*self.meta.conn_id).send_cq,
+                1,
+                &mut wc as *mut _,
+            )
+        };
+
+        if poll_result > 0 {
+            self.elements.lock().unwrap().low_watermark = (wc.wr_id >> WRID_RESERVE_BITS);
+
+            match wc.opcode {
+                ibv_wc_opcode::IBV_WC_SEND => {
+                    let element = self.elements.lock().unwrap();
+                    println!("poll send high: {}, low: {}", element.high_watermark, element.low_watermark);
+                },
+                _ => {
+                    self.whandler.lock().unwrap().upgrade().unwrap().rdma_send_handler(wc.wr_id);
+                }
+            }
+        }
+        poll_result
+    }
+
+    #[inline]
+    pub fn poll_until_complete(&self) {
+        loop {
+            self.poll_send();
+
+            let elements = self.elements.lock().unwrap();
+            if (elements.high_watermark - elements.low_watermark) <= elements.pending_sends {
+                break;
+            }
+        }
+    }
+
+    #[inline]
+    pub fn poll_in_need(&self) {
+        while self.need_poll() {
+            self.poll_send();
+        }
+    }
+
+    #[deprecated]
     pub fn poll_comps(&self) -> i32 {
         let mut wc: ibv_wc = unsafe { std::mem::zeroed() };
         let mut poll_result = unsafe { 
@@ -345,7 +427,7 @@ impl<'a> RdmaRcConn<'a> {
                 ibv_wc_opcode::IBV_WC_RECV => {
                     // println!("into recv");
                     let addr = wc.wr_id as *mut u8;
-                    self.handler.lock().unwrap().upgrade().unwrap().rdma_recv_handler(addr);
+                    self.rhandler.lock().unwrap().upgrade().unwrap().rdma_recv_handler(addr);
                 },
                 _ => {
                     unimplemented!();

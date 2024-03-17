@@ -41,7 +41,7 @@ impl<'a> RdmaControl<'a> {
         init_attr.cap.max_send_sge = 1;
         init_attr.cap.max_recv_sge = 1;
         init_attr.cap.max_inline_data = 16;
-        init_attr.sq_sig_all = 1;
+        init_attr.sq_sig_all = 0;
 
         init_attr
     }
@@ -156,7 +156,7 @@ impl<'a> RdmaControl<'a> {
                 lm,
                 std::mem::size_of::<RemoteMeta>(),
                 lmr,
-                0_i32,
+                ibv_send_flags::IBV_SEND_SIGNALED.0 as _,
             )
         };
 
@@ -263,7 +263,7 @@ impl<'a> RdmaControl<'a> {
                 lm,
                 std::mem::size_of::<RemoteMeta>(),
                 lmr,
-                0_i32,
+                ibv_send_flags::IBV_SEND_SIGNALED.0 as _,
             )
         };
 
