@@ -4,9 +4,10 @@ pub mod two_sides;
 pub mod rcconn;
 use lazy_static::lazy_static;
 use std::sync::Arc;
+use rcconn::RdmaRcConn;
 
 pub trait RdmaRecvCallback {
-    fn rdma_recv_handler(&self, msg: *mut u8);
+    fn rdma_recv_handler(&self, src_conn :&mut RdmaRcConn, msg: *mut u8);
 }
 
 #[derive(Default)]
@@ -14,7 +15,7 @@ struct DefaultRdmaRecvCallback;
 
 impl RdmaRecvCallback for DefaultRdmaRecvCallback {
     #![allow(unused_variables)]
-    fn rdma_recv_handler(&self, msg: *mut u8) {
+    fn rdma_recv_handler(&self, src_conn :&mut RdmaRcConn, msg: *mut u8) {
         unimplemented!("rdma recv callback");
     }
 }

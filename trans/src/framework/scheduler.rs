@@ -16,7 +16,7 @@ use super::rpc::RpcHeaderMeta;
 // because send does not require polling but read / write need
 
 pub struct AsyncScheduler<'a> {
-    conns:      RwLock<HashMap<u64, Arc<RdmaRcConn<'a>>>>,
+    conns:      RwLock<HashMap<u64, Arc<Mutex<RdmaRcConn<'a>>>>>,
     pendings:   Mutex<HashMap<u64, u64>>,
     //  read / write (one-side primitives)
 
@@ -38,7 +38,7 @@ impl<'a> AsyncScheduler<'a> {
         }
     }
 
-    fn append_conn(&self, id: u64, conn: &Arc<RdmaRcConn<'a>>) {
+    fn append_conn(&self, id: u64, conn: &Arc<Mutex<RdmaRcConn<'a>>>) {
         self.conns.write().unwrap().insert(id, conn.clone());
     }
 
@@ -48,7 +48,7 @@ impl<'a> AsyncScheduler<'a> {
 }
 
 impl<'a> RdmaRecvCallback for AsyncScheduler<'a> {
-    fn rdma_recv_handler(&self, msg: *mut u8) {
+    fn rdma_recv_handler(&self, src_conn :&mut RdmaRcConn, msg: *mut u8) {
         // todo!();
         
     }
@@ -103,7 +103,7 @@ impl<'a> AsyncRpc for AsyncScheduler<'a> {
         
         let conn_pool = self.conns.read().unwrap();
         let conn = conn_pool.get(&peer_id).unwrap();
-        conn.send_pending(unsafe { msg.byte_sub(4) as _ }, rpc_size + 4).unwrap();
+        conn.lock().unwrap().send_pending(unsafe { msg.byte_sub(4) as _ }, rpc_size + 4).unwrap();
     }
 
     fn append_req(
@@ -121,6 +121,6 @@ impl<'a> AsyncRpc for AsyncScheduler<'a> {
         
         let conn_pool = self.conns.read().unwrap();
         let conn = conn_pool.get(&peer_id).unwrap();
-        conn.send_one(unsafe { msg.byte_sub(4) as _ }, rpc_size + 4);
+        conn.lock().unwrap().send_one(unsafe { msg.byte_sub(4) as _ }, rpc_size + 4);
     }
 }

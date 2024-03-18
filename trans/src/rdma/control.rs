@@ -1,7 +1,7 @@
 #![allow(unused)]
 use std::alloc::Layout;
 use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, RwLock, Mutex};
 
 use libc::free;
 use libc::{malloc, memalign};
@@ -23,7 +23,7 @@ struct RemoteMeta {
 pub struct RdmaControl<'a> {
     self_id:     u64,
     listen_fd:   *mut rdma_cm_id,
-    connections: RwLock<HashMap<u64, Arc<RdmaRcConn<'a>>>>,
+    connections: HashMap<u64, Arc<Mutex<RdmaRcConn<'a>>>>,
     lm:          *mut u8,
     allocator:   Arc<LockedHeap>,
 }
@@ -38,7 +38,7 @@ impl<'a> RdmaControl<'a> {
         Self {
             self_id:     self_id,
             listen_fd:   std::ptr::null_mut(),
-            connections: RwLock::new(HashMap::new()),
+            connections: HashMap::new(),
             lm:          lm as *mut u8,
             allocator:   allocator,
         }
@@ -100,7 +100,7 @@ impl<'a> RdmaControl<'a> {
         self.listen_fd = listen_id;
     }
 
-    pub fn connect(&self, peer_id: u64, ip: &str, port: &str) -> TransResult<()> {
+    pub fn connect(&mut self, peer_id: u64, ip: &str, port: &str) -> TransResult<()> {
         let mut hints = unsafe { std::mem::zeroed::<rdma_addrinfo>() };
         let mut res: *mut rdma_addrinfo = std::ptr::null_mut();
     
@@ -216,16 +216,16 @@ impl<'a> RdmaControl<'a> {
             self.allocator.dealloc(recv_addr, send_recv_layout);
         }
 
-        self.connections.write().unwrap().insert(peer_id, Arc::new(connection));
+        self.connections.insert(peer_id, Arc::new(Mutex::new(connection)));
 
         Ok(())
     }
 
-    pub fn get_connection(&self, peer_id: u64) -> Arc<RdmaRcConn<'a>> {
-        self.connections.read().unwrap().get(&peer_id).unwrap().clone()
+    pub fn get_connection(&self, peer_id: u64) -> Arc<Mutex<RdmaRcConn<'a>>> {
+        self.connections.get(&peer_id).unwrap().clone()
     }
 
-    fn accept(&self) {
+    fn accept(&mut self) {
         let mut id: *mut rdma_cm_id = std::ptr::null_mut();
         let mut ret = unsafe { rdma_get_request(self.listen_fd, &mut id) };
         if ret != 0 {
@@ -336,12 +336,12 @@ impl<'a> RdmaControl<'a> {
             self.allocator.dealloc(recv_addr, send_recv_layout);
         }
 
-        self.connections.write().unwrap().insert(recv_data.peer_id, Arc::new(connection));
+        self.connections.insert(recv_data.peer_id, Arc::new(Mutex::new(connection)));
 
     }
 
-    pub fn listen_task(&self) {
-        while self.connections.read().unwrap().len() < (PEERNUMS-1) as usize {
+    pub fn listen_task(&mut self) {
+        while self.connections.len() < (PEERNUMS-1) as usize {
             self.accept();
         }
     }

@@ -19,27 +19,27 @@ pub struct AddResponse {
 }
 
 struct AddRpcProcess<'a> {
-    conn: Arc<RdmaRcConn<'a>>,
+    conn: Arc<Mutex<RdmaRcConn<'a>>>,
 }
 impl<'a> RdmaRecvCallback for AddRpcProcess<'a> {
-    fn rdma_recv_handler(&self, msg: *mut u8) {
+    fn rdma_recv_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8) {
         let req = msg as *mut AddRequest;
         let a = unsafe { (*req).a };
         let b = unsafe { (*req).b };
         println!("get add request {:} {:}", a, b);
 
         let size = std::mem::size_of::<AddResponse>();
-        let addr = self.conn.alloc_mr(size).unwrap();
+        let addr = src_conn.alloc_mr(size).unwrap();
         unsafe {
             (*(addr as *mut AddResponse)).sum = a + b;
         }
         
-        self.conn.send_pending(addr, size as _).unwrap();
+        src_conn.send_pending(addr, size as _).unwrap();
     }
 }
 
 impl<'a> AddRpcProcess<'a> {
-    fn new(conn: &Arc<RdmaRcConn<'a>>) -> Self {
+    fn new(conn: &Arc<Mutex<RdmaRcConn<'a>>>) -> Self {
         Self {
             conn: conn.clone()
         }
@@ -55,14 +55,14 @@ fn main() {
     rdma.listen_task();
 
     let conn = rdma.get_connection(0);
-    conn.init_and_start_recvs().unwrap();
+    conn.lock().unwrap().init_and_start_recvs().unwrap();
 
     let process = Arc::new(AddRpcProcess::new(&conn));
-    conn.register_recv_callback( &process).unwrap();
+    conn.lock().unwrap().register_recv_callback( &process).unwrap();
 
     let mut num = 0_i32;
     loop {
-        let n = conn.poll_recvs();
+        let n = conn.lock().unwrap().poll_recvs();
         if n > 0 {
             num = num + n;
             // println!("n {:} , num {:}", n,  num);
