@@ -316,7 +316,7 @@ impl<'a> RdmaRcConn<'a> {
         };
 
         if poll_result > 0 {
-            self.elements.lock().unwrap().low_watermark = (wc.wr_id >> WRID_RESERVE_BITS);
+            self.elements.lock().unwrap().low_watermark = wc.wr_id >> WRID_RESERVE_BITS;
 
             match wc.opcode {
                 ibv_wc_opcode::IBV_WC_SEND => {

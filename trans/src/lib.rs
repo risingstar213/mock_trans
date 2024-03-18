@@ -29,7 +29,7 @@ const MAX_PACKET_SIZE: usize = 128;
 const MAX_SEND_SIZE: usize = 32;
 const MAX_RECV_SIZE: usize = 64;
 const MAX_DOORBELL_SEND_SIZE: usize = 8;
-const MAX_IDLE_RECV_NUM: usize = 1;
+// const MAX_IDLE_RECV_NUM: usize = 1;
 
 const MAX_SIGNAL_PENDINGS: usize = MAX_SEND_SIZE - MAX_DOORBELL_SEND_SIZE;
 const WRID_RESERVE_BITS: usize = 8;
