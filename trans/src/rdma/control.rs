@@ -1,11 +1,13 @@
 #![allow(unused)]
+use std::alloc::Layout;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
+use libc::free;
 use libc::{malloc, memalign};
 use rdma_sys::*;
 use errno::errno;
-
+use ll_alloc::LockedHeap;
 
 use super::rcconn::{RdmaRcConn};
 
@@ -22,14 +24,23 @@ pub struct RdmaControl<'a> {
     self_id:     u64,
     listen_fd:   *mut rdma_cm_id,
     connections: RwLock<HashMap<u64, Arc<RdmaRcConn<'a>>>>,
+    lm:          *mut u8,
+    allocator:   Arc<LockedHeap>,
 }
 
 impl<'a> RdmaControl<'a> {
     pub fn new(self_id: u64) -> Self {
+        let mr_length = 4096 * NPAGES as usize;
+        let lm = unsafe { memalign(4096, mr_length) };
+        let allocator = Arc::new(unsafe { LockedHeap::new(lm as _, (NPAGES * 4096) as usize) });
+
+
         Self {
             self_id:     self_id,
             listen_fd:   std::ptr::null_mut(),
-            connections: RwLock::new(HashMap::new())
+            connections: RwLock::new(HashMap::new()),
+            lm:          lm as *mut u8,
+            allocator:   allocator,
         }
     }
 
@@ -113,8 +124,10 @@ impl<'a> RdmaControl<'a> {
         }
 
         // bind mr and send meta
+        // let mr_length = 4096 * NPAGES as usize;
+        // let lm = unsafe { memalign(4096, mr_length) };
         let mr_length = 4096 * NPAGES as usize;
-        let lm = unsafe { memalign(4096, mr_length) };
+        let lm = self.lm as _;
         let access = 
             ibv_access_flags::IBV_ACCESS_LOCAL_WRITE.0 | 
             ibv_access_flags::IBV_ACCESS_REMOTE_READ.0 | 
@@ -128,16 +141,22 @@ impl<'a> RdmaControl<'a> {
             )
         };
 
+        let send_recv_layout = Layout::from_size_align(
+            std::mem::size_of::<RemoteMeta>(), 
+            std::mem::align_of::<RemoteMeta>()
+        ).unwrap();
+        let send_addr = unsafe { self.allocator.alloc(send_recv_layout) };
+
         unsafe {
-            *(lm as *mut RemoteMeta) = RemoteMeta {
+            *(send_addr as *mut RemoteMeta) = RemoteMeta {
                 peer_id: self.self_id,
                 raddr: unsafe { (*lmr).addr } as u64,
                 rid: unsafe { (*lmr).rkey }
             };
         }
 
-        let recv_addr = lm.wrapping_add(std::mem::size_of::<RemoteMeta>());
-        ret = unsafe { rdma_post_recv(id, recv_addr, recv_addr, std::mem::size_of::<RemoteMeta>(), lmr) };
+        let recv_addr = unsafe { self.allocator.alloc(send_recv_layout) };
+        ret = unsafe { rdma_post_recv(id, recv_addr as _, recv_addr as _, std::mem::size_of::<RemoteMeta>(), lmr) };
         if ret != 0 {
             println!("rdma_post_recv");
             return Err(TransError::TransRdmaError);
@@ -152,8 +171,8 @@ impl<'a> RdmaControl<'a> {
         ret = unsafe {
             rdma_post_send(
                 id,
-                lm,
-                lm,
+                send_addr as _,
+                send_addr as _,
                 std::mem::size_of::<RemoteMeta>(),
                 lmr,
                 ibv_send_flags::IBV_SEND_SIGNALED.0 as _,
@@ -189,7 +208,13 @@ impl<'a> RdmaControl<'a> {
             lmr,
             recv_data.raddr,
             recv_data.rid,
+            &self.allocator,
         );
+
+        unsafe {
+            self.allocator.dealloc(send_addr, send_recv_layout);
+            self.allocator.dealloc(recv_addr, send_recv_layout);
+        }
 
         self.connections.write().unwrap().insert(peer_id, Arc::new(connection));
 
@@ -221,8 +246,10 @@ impl<'a> RdmaControl<'a> {
         };
 
         // bind mr and send meta
+        // let mr_length = 4096 * NPAGES as usize;
+        // let lm = unsafe { memalign(4096, mr_length) };
         let mr_length = 4096 * NPAGES as usize;
-        let lm = unsafe { memalign(4096, mr_length) };
+        let lm = self.lm as _;
         let access = 
             ibv_access_flags::IBV_ACCESS_LOCAL_WRITE.0 | 
             ibv_access_flags::IBV_ACCESS_REMOTE_READ.0 | 
@@ -236,16 +263,22 @@ impl<'a> RdmaControl<'a> {
             )
         };
 
+        let send_recv_layout = Layout::from_size_align(
+            std::mem::size_of::<RemoteMeta>(), 
+            std::mem::align_of::<RemoteMeta>()
+        ).unwrap();
+        let send_addr = unsafe { self.allocator.alloc(send_recv_layout) };
+
         unsafe {
-            *(lm as *mut RemoteMeta) = RemoteMeta {
+            *(send_addr as *mut RemoteMeta) = RemoteMeta {
                 peer_id: self.self_id,
                 raddr: unsafe { (*lmr).addr } as u64,
                 rid: unsafe { (*lmr).rkey }
             };
         }
 
-        let recv_addr = lm.wrapping_add(std::mem::size_of::<RemoteMeta>());
-        ret = unsafe { rdma_post_recv(id, recv_addr, recv_addr, std::mem::size_of::<RemoteMeta>(), lmr) };
+        let recv_addr = unsafe { self.allocator.alloc(send_recv_layout) };
+        ret = unsafe { rdma_post_recv(id, recv_addr as _, recv_addr as _, std::mem::size_of::<RemoteMeta>(), lmr) };
         if ret != 0 {
             println!("rdma_post_recv");
         }
@@ -259,8 +292,8 @@ impl<'a> RdmaControl<'a> {
         ret = unsafe {
             rdma_post_send(
                 id,
-                lm,
-                lm,
+                send_addr as _,
+                send_addr as _,
                 std::mem::size_of::<RemoteMeta>(),
                 lmr,
                 ibv_send_flags::IBV_SEND_SIGNALED.0 as _,
@@ -294,7 +327,14 @@ impl<'a> RdmaControl<'a> {
             lmr,
             recv_data.raddr,
             recv_data.rid,
+            &self.allocator
         );
+
+
+        unsafe {
+            self.allocator.dealloc(send_addr, send_recv_layout);
+            self.allocator.dealloc(recv_addr, send_recv_layout);
+        }
 
         self.connections.write().unwrap().insert(recv_data.peer_id, Arc::new(connection));
 
@@ -307,4 +347,10 @@ impl<'a> RdmaControl<'a> {
     }
 
 
+}
+
+impl<'a> Drop for RdmaControl<'a> {
+    fn drop(&mut self) {
+        unsafe { free(self.lm as *mut _); }
+    }
 }

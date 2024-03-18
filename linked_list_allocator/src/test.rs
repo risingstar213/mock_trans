@@ -2,6 +2,8 @@ use super::*;
 use std::{
     alloc::Layout,
     ops::{Deref, DerefMut},
+    sync::Arc,
+    sync::Mutex
 };
 use std::{
     mem::{align_of, size_of, MaybeUninit},
@@ -73,20 +75,20 @@ impl<const N: usize> DerefMut for OwnedHeap<N> {
     }
 }
 
-pub fn new_heap() -> OwnedHeap<1000> {
+pub fn new_heap() -> Arc<Mutex<OwnedHeap<1000>>> {
     const HEAP_SIZE: usize = 1000;
     let (heap_space_ptr, data_ptr) = Chonk::<HEAP_SIZE>::new();
 
     let heap = unsafe { Heap::new(data_ptr, HEAP_SIZE) };
     assert_eq!(heap.bottom(), data_ptr);
     assert_eq!(heap.size(), align_down_size(HEAP_SIZE, size_of::<usize>()));
-    OwnedHeap {
+    Arc::new(Mutex::new(OwnedHeap {
         heap,
         _drop: Dropper::new(heap_space_ptr),
-    }
+    }))
 }
 
-fn new_max_heap() -> OwnedHeap<2048> {
+fn new_max_heap() -> Arc<Mutex<OwnedHeap<2048>>> {
     const HEAP_SIZE: usize = 1024;
     const HEAP_SIZE_MAX: usize = 2048;
     let (heap_space_ptr, data_ptr) = Chonk::<HEAP_SIZE_MAX>::new();
@@ -96,21 +98,21 @@ fn new_max_heap() -> OwnedHeap<2048> {
     assert_eq!(heap.bottom(), data_ptr);
     assert_eq!(heap.size(), HEAP_SIZE);
 
-    OwnedHeap {
+    Arc::new(Mutex::new(OwnedHeap {
         heap,
         _drop: Dropper::new(heap_space_ptr),
-    }
+    }))
 }
 
-fn new_heap_skip(ct: usize) -> OwnedHeap<1000> {
+fn new_heap_skip(ct: usize) -> Arc<Mutex<OwnedHeap<1000>>> {
     const HEAP_SIZE: usize = 1000;
     let (heap_space_ptr, data_ptr) = Chonk::<HEAP_SIZE>::new();
 
     let heap = unsafe { Heap::new(data_ptr.add(ct), HEAP_SIZE - ct) };
-    OwnedHeap {
+    Arc::new(Mutex::new(OwnedHeap {
         heap,
         _drop: Dropper::new(heap_space_ptr),
-    }
+    }))
 }
 
 #[test]
@@ -139,7 +141,8 @@ fn oom() {
 
 #[test]
 fn allocate_double_usize() {
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
     let size = size_of::<usize>() * 2;
     let layout = Layout::from_size_align(size, align_of::<usize>());
     let addr = heap.allocate_first_fit(layout.unwrap());
@@ -160,7 +163,8 @@ fn allocate_double_usize() {
 
 #[test]
 fn allocate_and_free_double_usize() {
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
 
     let layout = Layout::from_size_align(size_of::<usize>() * 2, align_of::<usize>()).unwrap();
     let x = heap.allocate_first_fit(layout.clone()).unwrap();
@@ -177,7 +181,8 @@ fn allocate_and_free_double_usize() {
 
 #[test]
 fn deallocate_right_before() {
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
     let layout = Layout::from_size_align(size_of::<usize>() * 5, 1).unwrap();
 
     let x = heap.allocate_first_fit(layout.clone()).unwrap();
@@ -196,7 +201,8 @@ fn deallocate_right_before() {
 
 #[test]
 fn deallocate_right_behind() {
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
     let size = size_of::<usize>() * 5;
     let layout = Layout::from_size_align(size, 1).unwrap();
 
@@ -216,7 +222,8 @@ fn deallocate_right_behind() {
 
 #[test]
 fn deallocate_middle() {
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
     let size = size_of::<usize>() * 5;
     let layout = Layout::from_size_align(size, 1).unwrap();
 
@@ -240,7 +247,8 @@ fn deallocate_middle() {
 
 #[test]
 fn reallocate_double_usize() {
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
 
     let layout = Layout::from_size_align(size_of::<usize>() * 2, align_of::<usize>()).unwrap();
 
@@ -275,7 +283,8 @@ fn allocate_many_size_aligns() {
 
     const STRATS: Range<usize> = 0..4;
 
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
     let aligned_heap_size = align_down_size(1000, size_of::<usize>());
     assert_eq!(heap.size(), aligned_heap_size);
 
@@ -400,7 +409,8 @@ fn allocate_many_size_aligns() {
 
 #[test]
 fn allocate_multiple_sizes() {
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
     let base_size = size_of::<usize>();
     let base_align = align_of::<usize>();
 
@@ -436,7 +446,8 @@ fn allocate_multiple_sizes() {
 #[test]
 fn allocate_multiple_unaligned() {
     for offset in 0..=Layout::new::<Hole>().size() {
-        let mut heap = new_heap_skip(offset);
+        let arc_heap = new_heap_skip(offset);
+        let mut heap = arc_heap.lock().unwrap();
         let base_size = size_of::<usize>();
         let base_align = align_of::<usize>();
 
@@ -470,7 +481,8 @@ fn allocate_multiple_unaligned() {
 
 #[test]
 fn allocate_usize() {
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
 
     let layout = Layout::from_size_align(size_of::<usize>(), 1).unwrap();
 
@@ -479,7 +491,8 @@ fn allocate_usize() {
 
 #[test]
 fn allocate_usize_in_bigger_block() {
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
 
     let layout_1 = Layout::from_size_align(size_of::<usize>() * 2, 1).unwrap();
     let layout_2 = Layout::from_size_align(size_of::<usize>(), 1).unwrap();
@@ -504,7 +517,8 @@ fn allocate_usize_in_bigger_block() {
 #[test]
 // see https://github.com/phil-opp/blog_os/issues/160
 fn align_from_small_to_big() {
-    let mut heap = new_heap();
+    let arc_heap = new_heap();
+    let mut heap = arc_heap.lock().unwrap();
 
     let layout_1 = Layout::from_size_align(28, 4).unwrap();
     let layout_2 = Layout::from_size_align(8, 8).unwrap();
@@ -517,7 +531,8 @@ fn align_from_small_to_big() {
 
 #[test]
 fn extend_empty_heap() {
-    let mut heap = new_max_heap();
+    let arc_heap = new_max_heap();
+    let mut heap = arc_heap.lock().unwrap();
 
     unsafe {
         heap.extend(1024);
@@ -530,7 +545,8 @@ fn extend_empty_heap() {
 
 #[test]
 fn extend_full_heap() {
-    let mut heap = new_max_heap();
+    let arc_heap = new_max_heap();
+    let mut heap = arc_heap.lock().unwrap();
 
     let layout = Layout::from_size_align(1024, 1).unwrap();
 
@@ -544,7 +560,8 @@ fn extend_full_heap() {
 
 #[test]
 fn extend_fragmented_heap() {
-    let mut heap = new_max_heap();
+    let arc_heap = new_max_heap();
+    let mut heap = arc_heap.lock().unwrap();
 
     let layout_1 = Layout::from_size_align(512, 1).unwrap();
     let layout_2 = Layout::from_size_align(1024, 1).unwrap();

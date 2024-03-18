@@ -1,3 +1,4 @@
+use std::hash::Hash;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::collections::HashMap;
@@ -12,13 +13,15 @@ use super::rpc::AsyncRpc;
 
 pub struct AsyncScheduler<'a> {
     conns:    Mutex<HashMap<u64, Arc<RdmaRcConn<'a>>>>,
-    // pendings: Mutex<HashMap<u64, u64>>,
+    pendings: Mutex<HashMap<u64, u64>>,
+
 }
 
 impl<'a> AsyncScheduler<'a> {
     pub fn new() -> Self {
         Self {
-            conns:   Mutex::new(HashMap::new())
+            conns:    Mutex::new(HashMap::new()),
+            pendings: Mutex::new(HashMap::new())
         }
     }
 

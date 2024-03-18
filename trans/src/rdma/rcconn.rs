@@ -2,7 +2,6 @@ use std::alloc::Layout;
 use std::sync::{Mutex, MutexGuard};
 use std::sync::{Arc, Weak};
 
-use libc::free;
 use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;
 use rdma_sys::*;
 use ll_alloc::LockedHeap;
@@ -49,10 +48,13 @@ impl Default for RdmaElement {
     }
 }
 
+// TODO: Recv elements can be shared between connections ?
+// How to treat buffers to store reqs? They cannot be shared
 pub struct RdmaRcConn<'a> {
     meta:      RdmaRcMeta,
-    allocator: LockedHeap,
+    allocator: Arc<LockedHeap>,
     elements:  Mutex<RdmaElement>,
+    rwcs:      Mutex<[ibv_wc; MAX_RECV_SIZE]>,
     rhandler:  Mutex<Weak<dyn RdmaRecvCallback + Send + Sync + 'a>>,
     whandler:  Mutex<Weak<dyn RdmaSendCallback + Send + Sync + 'a>>
 }
@@ -62,7 +64,7 @@ unsafe impl<'a> Sync for RdmaRcConn<'a> {}
 
 // RC Connection 
 impl<'a> RdmaRcConn<'a> {
-    pub fn new(id: *mut rdma_cm_id, lm: *mut u8, lmr: *mut ibv_mr, raddr: u64, rid: u32) -> Self {
+    pub fn new(id: *mut rdma_cm_id, lm: *mut u8, lmr: *mut ibv_mr, raddr: u64, rid: u32, allocator: &Arc<LockedHeap>) -> Self {
         let meta = RdmaRcMeta {
             conn_id: id,
             lm:      lm,
@@ -71,12 +73,13 @@ impl<'a> RdmaRcConn<'a> {
             rid:     rid,
         };
 
-        let allocator = unsafe { LockedHeap::new(lm, (NPAGES * 4096) as usize) };
+        // let allocator = unsafe { LockedHeap::new(lm, (NPAGES * 4096) as usize) };
 
         Self {
             meta:      meta,
-            allocator: allocator,
+            allocator: allocator.clone(),
             elements:  Mutex::new(RdmaElement::default()),
+            rwcs:      Mutex::new(unsafe { std::mem::zeroed() }),
             rhandler:  Mutex::new(Arc::downgrade(&DEFAULT_RDMA_RECV_HANDLER) as _),
             whandler:  Mutex::new(Arc::downgrade(&DEFAULT_RDMA_SEND_HANDLER) as _)
         }
@@ -278,13 +281,14 @@ impl<'a> RdmaRcConn<'a> {
         Ok(())
     }
 
+    // This func can only be called in master coroutine, so it is impossible to be recusively locked.
     pub fn poll_recvs(&self) -> i32 {
-        let mut rwcs: [ibv_wc; MAX_RECV_SIZE] = unsafe { std::mem::zeroed() };
+        let mut rwcs = self.rwcs.lock().unwrap();
         let poll_result = unsafe { 
             ibv_poll_cq(
             (*self.meta.conn_id).recv_cq,
             MAX_RECV_SIZE  as _,
-            &mut rwcs as *mut _,
+            &mut rwcs[0] as *mut _,
             )
         };
         for i in 0..poll_result as usize {
@@ -466,7 +470,7 @@ impl<'a> Drop for RdmaRcConn<'a> {
         unsafe {
             rdma_dereg_mr(self.meta.lmr);
             rdma_disconnect(self.meta.conn_id);
-            free(self.meta.lm as *mut _);
+            // free(self.meta.lm as *mut _);
         }
 
     }

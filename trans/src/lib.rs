@@ -22,7 +22,7 @@ const SERVERs: [&str; 2] = ["10.10.10.6\0", "10.10.10.9\0"];
 const PORTs: [&str; 2] = ["7471\0", "7472\0"];
 
 // mem info
-const NPAGES: u64 = 4;
+const NPAGES: u64 = 8;
 const MAX_PACKET_SIZE: usize = 128;
 
 // send recv info

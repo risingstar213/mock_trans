@@ -688,7 +688,8 @@ pub mod test {
 
     #[test]
     fn cursor() {
-        let mut heap = new_heap();
+        let arc_heap = new_heap();
+        let mut heap = arc_heap.lock().unwrap();
         let curs = heap.holes.cursor().unwrap();
         // This is the "dummy" node
         assert_eq!(curs.previous().size, 0);
@@ -703,7 +704,8 @@ pub mod test {
 
     #[test]
     fn aff() {
-        let mut heap = new_heap();
+        let arc_heap = new_heap();
+        let mut heap = arc_heap.lock().unwrap();
         let reqd = Layout::from_size_align(256, 1).unwrap();
         let _ = heap.allocate_first_fit(reqd).unwrap();
     }
