@@ -60,7 +60,7 @@ pub struct RdmaRcConn<'a> {
 }
 
 unsafe impl<'a> Send for RdmaRcConn<'a> {}
-unsafe impl<'a> Sync for RdmaRcConn<'a> {}
+// unsafe impl<'a> Sync for RdmaRcConn<'a> {}
 
 // RC Connection 
 impl<'a> RdmaRcConn<'a> {
@@ -384,7 +384,7 @@ impl<'a> RdmaRcConn<'a> {
 
     #[inline]
     pub fn alloc_mr(&self, size: usize) -> TransResult<*mut u8> {
-        let layout = Layout::from_size_align(size, std::mem::size_of::<usize>()).unwrap();
+        let layout = Layout::from_size_align(size, std::mem::align_of::<usize>()).unwrap();
         let addr = unsafe { self.allocator.alloc(layout) };
         if addr.is_null() {
             return Err(TransError::TransRdmaError);
@@ -395,7 +395,7 @@ impl<'a> RdmaRcConn<'a> {
 
     #[inline]
     pub fn deallocate_mr(&self, addr: *mut u8, size: usize) {
-        let layout = Layout::from_size_align(size, std::mem::size_of::<usize>()).unwrap();
+        let layout = Layout::from_size_align(size, std::mem::align_of::<usize>()).unwrap();
         unsafe { self.allocator.dealloc(addr, layout); }
     }
 

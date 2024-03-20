@@ -1,10 +1,14 @@
 use byte_struct::*;
+
+use crate::rdma::rcconn::RdmaRcConn;
+use super::scheduler::AsyncScheduler;
 // two-side information
 
-pub enum RpcMsgType {
-    Req,
-    YReq,
-    Reply,
+pub mod RpcMsgType {
+    pub type Type = u32;
+    pub const REQ: Type = 0;
+    pub const Y_REQ: Type = 1;
+    pub const RESP: Type = 2;
 }
 
 bitfields!(
@@ -30,6 +34,10 @@ impl RpcHeaderMeta {
     pub fn to_header(&self) -> u32 {
         self.to_raw()
     }
+
+    pub fn from_header(raw: u32) -> Self {
+        RpcHeaderMeta::from_raw(raw)
+    }
 }
 
 // pub trait RpcMsg {
@@ -37,10 +45,18 @@ impl RpcHeaderMeta {
 // }
 
 pub trait AsyncRpc {
-    fn get_reply_buf() -> *mut u8;
-    fn get_req_buf() -> *mut u8;
+    fn get_reply_buf(&self) -> *mut u8;
+    fn get_req_buf(&self) -> *mut u8;
 
-    fn send_reply(peer_id: u64, msg: *mut u8);
+    fn send_reply(
+        src_conn: &mut RdmaRcConn, 
+        msg: *mut u8,
+        rpc_id: u32, 
+        rpc_size: u32,
+        rpc_cid: u32,
+        peer_id: u64,
+        peer_tid: u64
+    );
     fn append_pending_req(
         &self,
         msg: *mut u8,
@@ -65,7 +81,7 @@ pub trait AsyncRpc {
 
 
 pub trait RpcHandler {
-    fn rpc_handler();
+    fn rpc_handler(&self, src_conn: &mut RdmaRcConn);
 }
 
 #[test]

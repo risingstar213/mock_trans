@@ -346,6 +346,10 @@ impl<'a> RdmaControl<'a> {
         }
     }
 
+    pub fn get_allocator(&self) -> Arc<LockedHeap> {
+        return self.allocator.clone();
+    }
+
 
 }
 
