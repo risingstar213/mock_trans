@@ -63,6 +63,7 @@ fn main() {
     let mut num = 0_i32;
     loop {
         let n = conn.lock().unwrap().poll_recvs();
+        conn.lock().unwrap().flush_pending().unwrap();
         if n > 0 {
             num = num + n;
             // println!("n {:} , num {:}", n,  num);

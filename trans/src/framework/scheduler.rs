@@ -1,4 +1,4 @@
- use std::alloc::Layout;
+use std::alloc::Layout;
 use std::sync::{Arc, Weak};
 use std::sync::{Mutex, RwLock};
 use std::collections::HashMap;
@@ -12,56 +12,84 @@ use crate::rdma::rcconn::RdmaRcConn;
 use crate::rdma::one_side::OneSideComm;
 use crate::rdma::two_sides::TwoSidesComm;
 use crate::rdma::RdmaSendCallback;
-use crate::{MAX_RESP_SIZE, MAX_SEND_SIZE};
+use crate::{MAX_REQ_SIZE, MAX_RESP_SIZE, MAX_SEND_SIZE};
 
-use super::rpc::AsyncRpc;
+use super::rpc::{AsyncRpc, RpcProcessMeta};
 use super::rpc::RpcHeaderMeta;
 use super::rpc::RpcHandler;
 use super::rpc::RpcMsgType;
+use super::rpc::DEFAULT_RPC_HANDLER;
 
 // process send / read / write saparately
 // because send does not require polling but read / write need
 
+pub struct ReplyMeta {
+    reply_bufs:   Vec<*mut u8>,
+    reply_counts: Vec<u32>,
+}
+
+impl ReplyMeta {
+    fn new(routine_num: u64) -> Self {
+        let mut bufs = Vec::new();
+        let mut counts = Vec::new();
+
+        for _ in 0..routine_num {
+            bufs.push(std::ptr::null_mut());
+            counts.push(0);
+        }
+        Self {
+            reply_bufs:   bufs,
+            reply_counts: counts,
+        }
+    }
+}
+
 pub struct AsyncScheduler<'a> {
     allocator:    Arc<LockedHeap>,
-    conns:        HashMap<u64, Arc<Mutex<RdmaRcConn<'a>>>>,
+    conns:        RwLock<HashMap<u64, Arc<Mutex<RdmaRcConn<'a>>>>>,
     //  read / write (one-side primitives)
     // pending for coroutines
     pendings:     Mutex<Vec<u32>>,
 
     // rpcs (two-sides primitives)
-    reply_bufs:   Mutex<Vec<*mut u8>>,
-    reply_counts: Mutex<Vec<u32>>,
+    reply_metas:  Mutex<ReplyMeta>,
 
     // callbacks
-    callbacks:    Vec<Weak<dyn RpcHandler + 'a>>
+    callback:     RwLock<Weak<dyn RpcHandler + Send + Sync + 'a>>
 }
+
+// 手动标记 Send + Sync
+unsafe impl<'a> Send for AsyncScheduler<'a> {}
+unsafe impl<'a> Sync for AsyncScheduler<'a> {}
 
 impl<'a> AsyncScheduler<'a> {
     pub fn new(routine_num: u64, allocator: &Arc<LockedHeap>) -> Self {
+        let mut pendings = Vec::new();
+        for _ in 0..routine_num {
+            pendings.push(0);
+        }
         Self {
             allocator:    allocator.clone(),
-            conns:        HashMap::new(),
-            pendings:     Mutex::new(Vec::new()),
-            reply_bufs:   Mutex::new(Vec::new()),
-            reply_counts: Mutex::new(Vec::new()),
+            conns:        RwLock::new(HashMap::new()),
+            pendings:     Mutex::new(pendings),
+            reply_metas:  Mutex::new(ReplyMeta::new(routine_num)),
 
             // callbacks
-            callbacks:    Vec::new(),
+            callback:     RwLock::new(Arc::downgrade(&DEFAULT_RPC_HANDLER) as _),
         }
     }
 
-    pub fn append_conn(&mut self, id: u64, conn: &Arc<Mutex<RdmaRcConn<'a>>>) {
-        self.conns.insert(id, conn.clone());
+    pub fn append_conn(&self, id: u64, conn: &Arc<Mutex<RdmaRcConn<'a>>>) {
+        self.conns.write().unwrap().insert(id, conn.clone());
     }
 
-    pub fn register_callback(&mut self, callback: &Arc<impl RpcHandler + 'a>) {
-        self.callbacks.push(Arc::downgrade(callback) as _);
+    pub fn register_callback(&self, callback: &Arc<impl RpcHandler + Send + Sync + 'a>) {
+        *self.callback.write().unwrap() = Arc::downgrade(callback) as _;
     }
 
     pub fn poll_sends(&self) {
-        let iter = self.conns.iter();
-        for (peer_id, conn) in iter {
+        let guard = self.conns.read().unwrap();
+        for (_, conn) in guard.iter() {
             conn.lock().unwrap().poll_send();
         }
     }
@@ -76,11 +104,15 @@ impl<'a> RdmaSendCallback for AsyncScheduler<'a> {
 
 // RPCs
 impl<'a> AsyncScheduler<'a> {
-    fn poll_recvs(&self) {
+    pub fn poll_recvs(&self) {
         // let mut pendings = self.pendings.lock().unwrap();
-        let iter = self.conns.iter();
-        for (peer_id, conn) in iter {
+        let guard = self.conns.read().unwrap();
+        for (_, conn) in guard.iter() {
             conn.lock().unwrap().poll_recvs();
+        }
+
+        for (_, conn) in guard.iter() {
+            conn.lock().unwrap().flush_pending().unwrap();
         }
     }
 
@@ -93,7 +125,7 @@ impl<'a> AsyncScheduler<'a> {
     ) {
         let meta = RpcHeaderMeta::new(rpc_type, rpc_id, rpc_size, rpc_cid);
         unsafe {
-            *(msg.byte_sub(4) as *mut u32) = meta.to_header();
+            *(msg.sub(4) as *mut u32) = meta.to_header();
         }
     }
 
@@ -103,18 +135,31 @@ impl<'a> AsyncScheduler<'a> {
         reply_buf:   *mut u8,
         reply_count: u32,
     ) {
-
+        let mut reply_metas = self.reply_metas.lock().unwrap();
+        if let Some(mut_count) = reply_metas.reply_counts.get_mut::<usize>(cid as _) {
+            *mut_count = reply_count;
+        }
+        if let Some(mut_buf) = reply_metas.reply_bufs.get_mut::<usize>(cid as _) {
+            *mut_buf = reply_buf;
+        }
     }
 
     pub fn free_reply_buf(&self, addr: *mut u8, size: usize) {
         let layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::align_of::<usize>()).unwrap();
         // unsafe { self.allocator.alloc(layout) }
-        unsafe { self.allocator.dealloc(addr, layout) };
+        unsafe { self.allocator.dealloc(addr.sub(4), layout) };
     }
 
     pub fn free_req_buf(&self, addr: *mut u8, size: usize) {
-        let layout = Layout::from_size_align(MAX_SEND_SIZE, std::mem::align_of::<usize>()).unwrap();
-        unsafe { self.allocator.dealloc(addr.wrapping_byte_sub(1), layout) };
+        let layout = Layout::from_size_align(MAX_REQ_SIZE, std::mem::align_of::<usize>()).unwrap();
+        unsafe { self.allocator.dealloc(addr.sub(4), layout) };
+    }
+
+    pub fn flush_pending(&self) {
+        let guard = self.conns.read().unwrap();
+        for (_, conn) in guard.iter() {
+            conn.lock().unwrap().flush_pending().unwrap();
+        }
     }
 }
 
@@ -125,23 +170,35 @@ impl<'a> RdmaRecvCallback for AsyncScheduler<'a> {
 
         match meta.rpc_type {
             RpcMsgType::REQ  => {
-                let callback = self.callbacks.get::<usize>(meta.rpc_id as usize).unwrap();
-                callback.upgrade().unwrap().rpc_handler(src_conn);
+                let callback = &self.callback;
+                let process_meta = RpcProcessMeta::new(
+                    meta.rpc_cid,
+                    0,
+                    0
+                );
+                callback.read().unwrap().upgrade().unwrap().rpc_handler(
+                    src_conn,
+                    meta.rpc_id, 
+                    unsafe{ msg.add(4) },
+                    meta.rpc_payload,
+                    process_meta
+                );
             },
             RpcMsgType::Y_REQ => {
                 unimplemented!("yreq type is not allowed for time being");
             },
             RpcMsgType::RESP => {
                 let index = meta.rpc_cid as usize;
+                let mut reply_metas = self.reply_metas.lock().unwrap();
 
-                let buf = *self.reply_bufs.lock().unwrap().get::<usize>(index).unwrap();
-                unsafe { std::ptr::copy_nonoverlapping(msg.byte_add(1), buf, meta.rpc_payload as _); }
+                let buf = *reply_metas.reply_bufs.get::<usize>(index).unwrap();
+                unsafe { std::ptr::copy_nonoverlapping(msg.add(4), buf, meta.rpc_payload as _); }
 
-                if let Some(mut_buf) = self.reply_bufs.lock().unwrap().get_mut::<usize>(index) {
-                    *mut_buf = mut_buf.wrapping_add((meta.rpc_payload + 1) as usize);
+                if let Some(mut_buf) = reply_metas.reply_bufs.get_mut::<usize>(index) {
+                    *mut_buf = unsafe { mut_buf.add((meta.rpc_payload) as usize) };
                 }
 
-                if let Some(mut_count) = self.reply_counts.lock().unwrap().get_mut::<usize>(index) {
+                if let Some(mut_count) = reply_metas.reply_counts.get_mut::<usize>(index) {
                     *mut_count -= 1;
                 }
             },
@@ -156,16 +213,18 @@ impl<'a> AsyncRpc for AsyncScheduler<'a> {
     fn get_reply_buf(&self) -> *mut u8 {
         // std::ptr::null_mut()
         let layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::align_of::<usize>()).unwrap();
-        unsafe { self.allocator.alloc(layout) }
+        let buf = unsafe { self.allocator.alloc(layout) };
+        unsafe { buf.add(4) }
     }
 
     fn get_req_buf(&self) -> *mut u8 {
         let layout = Layout::from_size_align(MAX_SEND_SIZE, std::mem::align_of::<usize>()).unwrap();
         let buf = unsafe { self.allocator.alloc(layout) };
-        buf.wrapping_add(1)
+        unsafe { buf.add(4) }
     }
 
     fn send_reply(
+            &self,
             src_conn: &mut RdmaRcConn,
             msg: *mut u8,
             rpc_id: u32,
@@ -175,57 +234,61 @@ impl<'a> AsyncRpc for AsyncScheduler<'a> {
             peer_tid: u64,
         ) {
         Self::prepare_msg_header(msg, rpc_id, rpc_size, rpc_cid, RpcMsgType::RESP);
-        src_conn.send_one(unsafe { msg.byte_sub(4) as _ }, rpc_size + 4);
+        src_conn.send_pending(unsafe { msg.sub(4) as _ }, rpc_size + 4).unwrap();
     }
 
     fn append_pending_req(
             &self,
-            msg: *mut u8,
-            rpc_id: u32,
+            msg:      *mut u8,
+            rpc_id:   u32,
             rpc_size: u32,
-            rpc_cid: u32,
+            rpc_cid:  u32,
             rpc_type: u32,
-            peer_id: u64,
+            peer_id:  u64,
             peer_tid: u64,
         ) {
         // todo!();
         Self::prepare_msg_header(msg, rpc_id, rpc_size, rpc_cid, rpc_type);
 
-        let conn = self.conns.get(&peer_id).unwrap();
-        conn.lock().unwrap().send_pending(unsafe { msg.byte_sub(4) as _ }, rpc_size + 4).unwrap();
+        let guard = self.conns.read().unwrap();
+        let conn = guard.get(&peer_id).unwrap();
+        conn.lock().unwrap().send_pending(unsafe { msg.sub(4) as _ }, rpc_size + 4).unwrap();
     }
 
     fn append_req(
             &self,
-            msg: *mut u8,
-            rpc_id: u32,
+            msg:      *mut u8,
+            rpc_id:   u32,
             rpc_size: u32,
-            rpc_cid: u32,
+            rpc_cid:  u32,
             rpc_type: u32,
-            peer_id: u64,
+            peer_id:  u64,
             peer_tid: u64,
         ) {
         // todo!();
         Self::prepare_msg_header(msg, rpc_id, rpc_size, rpc_cid, rpc_type);
 
-        let conn = self.conns.get(&peer_id).unwrap();
-        conn.lock().unwrap().send_one(unsafe { msg.byte_sub(4) as _ }, rpc_size + 4);
+        let guard = self.conns.read().unwrap();
+        let conn = guard.get(&peer_id).unwrap();
+        conn.lock().unwrap().send_one(unsafe { msg.sub(4) as _ }, rpc_size + 4);
     }
 }
 
 // Async waiter
 impl<'a> AsyncScheduler<'a> {
-    pub async fn yield_now(&self) {
+    pub async fn yield_now(&self, cid: u32) {
+        // println!("yield: {}", cid);
         tokio::task::yield_now().await;
     }
 
     pub async fn yield_until_ready(&self, cid: u32) {
         loop {
             let pendings = *self.pendings.lock().unwrap().get::<usize>(cid as _).unwrap();
-            let reply_count = *self.reply_counts.lock().unwrap().get::<usize>(cid as _).unwrap();
-            if pendings > 0 || reply_count > 0 {
-                self.yield_now().await;
+            let reply_counts = *self.reply_metas.lock().unwrap().reply_counts.get::<usize>(cid as _).unwrap();
+            if pendings == 0 && reply_counts == 0 {
+                break;
             }
+            self.yield_now(cid).await;
         }
     }
 }

@@ -52,7 +52,7 @@ fn send_req(conn: &Arc<Mutex<RdmaRcConn>>, a: u8, b: u8) {
 
 fn main() {
     let mut rdma = RdmaControl::new(0);
-    rdma.connect(1, "10.10.10.9\0", "7472\0").unwrap();
+    rdma.connect(1, "10.10.10.7\0", "7472\0").unwrap();
 
     let conn = rdma.get_connection(1);
     conn.lock().unwrap().init_and_start_recvs().unwrap();
@@ -65,6 +65,7 @@ fn main() {
         let mut num = 0_i32;
         loop {
             let n = conn_clone.lock().unwrap().poll_recvs();
+            conn_clone.lock().unwrap().flush_pending().unwrap();
             if n > 0 {
                 num = num + n;
                 // println!("n {:} , num {:}", n,  num);

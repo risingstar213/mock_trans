@@ -288,7 +288,7 @@ impl<'a> RdmaRcConn<'a> {
             let addr = self.rwcs[i].wr_id as *mut u8;
             self.rhandler.upgrade().unwrap().rdma_recv_handler(self, addr);
         }
-        self.flush_pending().unwrap();
+        // self.flush_pending().unwrap();
 
         if poll_result > 0 {
             self.post_recvs(poll_result as _).unwrap();

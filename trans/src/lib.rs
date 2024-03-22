@@ -36,5 +36,5 @@ const WRID_RESERVE_BITS: usize = 8;
 
 
 // RPCs
-const MAX_REQ_SIZE: usize = 128;
+const MAX_REQ_SIZE: usize = 32;
 const MAX_RESP_SIZE: usize = 128;

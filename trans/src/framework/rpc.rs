@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use byte_struct::*;
+use lazy_static::lazy_static;
 
 use crate::rdma::rcconn::RdmaRcConn;
 use super::scheduler::AsyncScheduler;
@@ -40,6 +43,22 @@ impl RpcHeaderMeta {
     }
 }
 
+pub struct RpcProcessMeta {
+    pub rpc_cid: u32,
+    pub peer_id: u64,
+    pub peer_tid: u64,
+}
+
+impl RpcProcessMeta {
+    pub fn new(rpc_cid: u32, peer_id: u64, peer_tid: u64) -> Self {
+        Self {
+            rpc_cid: rpc_cid,
+            peer_id: peer_id,
+            peer_tid: peer_tid
+        }
+    }
+}
+
 // pub trait RpcMsg {
 //     fn get_header() -> RpcHeaderMeta;
 // }
@@ -49,6 +68,7 @@ pub trait AsyncRpc {
     fn get_req_buf(&self) -> *mut u8;
 
     fn send_reply(
+        &self,
         src_conn: &mut RdmaRcConn, 
         msg: *mut u8,
         rpc_id: u32, 
@@ -81,9 +101,20 @@ pub trait AsyncRpc {
 
 
 pub trait RpcHandler {
-    fn rpc_handler(&self, src_conn: &mut RdmaRcConn);
+    fn rpc_handler(&self, src_conn: &mut RdmaRcConn, rpc_id: u32, msg: *mut u8, size: u32, meta: RpcProcessMeta);
 }
 
+pub struct DefaultRpcHandler;
+
+impl RpcHandler for DefaultRpcHandler {
+    fn rpc_handler(&self, src_conn: &mut RdmaRcConn, rpc_id: u32, msg: *mut u8, size: u32, meta: RpcProcessMeta) {
+        unimplemented!("rpc handler");
+    }
+}
+
+lazy_static!{
+    pub static ref DEFAULT_RPC_HANDLER: Arc<DefaultRpcHandler> = Arc::new(DefaultRpcHandler);
+}
 #[test]
 fn test_bitfield() {
     let header = RpcHeaderMeta {
