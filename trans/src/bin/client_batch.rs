@@ -7,12 +7,13 @@ use trans::rdma::RdmaRecvCallback;
 use trans::rdma::rcconn::RdmaRcConn;
 use trans::rdma::two_sides::TwoSidesComm;
 
-
+#[repr(C)]
 pub struct AddRequest {
     a : u8,
     b : u8,
 }
 
+#[repr(C)]
 pub struct AddResponse {
     sum : u8
 }

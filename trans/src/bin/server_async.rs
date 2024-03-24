@@ -11,11 +11,13 @@ use trans::framework::scheduler::AsyncScheduler;
 use trans::framework::worker::AsyncWorker;
 use trans::framework::rpc::AsyncRpc;
 
+#[repr(C)]
 pub struct AddRequest {
     a : u8,
     b : u8,
 }
 
+#[repr(C)]
 pub struct AddResponse {
     sum : u8
 }
@@ -36,7 +38,7 @@ impl<'a> AnswerClientWorker<'a> {
     }
 }
 
-// RPCs
+// RPC handlers
 impl<'a> AnswerClientWorker<'a> {
     fn add_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8, size: u32, meta: RpcProcessMeta) {
         let req = msg as *mut AddRequest;

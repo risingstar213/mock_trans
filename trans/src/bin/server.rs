@@ -8,11 +8,13 @@ use trans::rdma::RdmaRecvCallback;
 
 use rdma_sys::*;
 
+#[repr(C)]
 pub struct AddRequest {
     a : u8,
     b : u8,
 }
 
+#[repr(C)]
 pub struct AddResponse {
     sum : u8
 }

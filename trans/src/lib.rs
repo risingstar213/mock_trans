@@ -34,7 +34,8 @@ const MAX_DOORBELL_SEND_SIZE: usize = 8;
 const MAX_SIGNAL_PENDINGS: usize = MAX_SEND_SIZE - MAX_DOORBELL_SEND_SIZE;
 const WRID_RESERVE_BITS: usize = 8;
 
-
 // RPCs
+const MAX_INFLIGHT_REPLY: usize = 32;
+const MAX_INFLIGHT_REQS: usize = 32;
 const MAX_REQ_SIZE: usize = 32;
 const MAX_RESP_SIZE: usize = 128;

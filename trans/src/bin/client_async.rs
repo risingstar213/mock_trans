@@ -1,20 +1,22 @@
 use std::sync::Arc;
 use std::sync::Mutex;
-use tokio;
+// use tokio;
 
 use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
-use trans::rdma::two_sides::TwoSidesComm;
+// use trans::rdma::two_sides::TwoSidesComm;
 
 use trans::framework::rpc::{AsyncRpc, RpcHandler, RpcMsgType};
 use trans::framework::scheduler::AsyncScheduler;
 use trans::framework::worker::AsyncWorker;
 
+#[repr(C)]
 pub struct AddRequest {
     a : u8,
     b : u8,
 }
 
+#[repr(C)]
 pub struct AddResponse {
     sum : u8
 }
@@ -41,7 +43,7 @@ impl<'a> AskServerWorker<'a> {
         self.scheduler.prepare_multi_replys(cid, reply_buf as _, 10);
 
         for i in 0..10 {
-            let req_buf = self.scheduler.get_req_buf();
+            let req_buf = self.scheduler.get_req_buf(cid);
             let size = std::mem::size_of::<AddRequest>();
 
             unsafe {

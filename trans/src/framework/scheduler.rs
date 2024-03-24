@@ -1,18 +1,19 @@
-use std::alloc::Layout;
+// use std::alloc::Layout;
 use std::sync::{Arc, Weak};
 use std::sync::{Mutex, RwLock};
 use std::collections::HashMap;
 
-use tokio;
 
 use ll_alloc::LockedHeap;
 
 use crate::rdma::RdmaRecvCallback;
 use crate::rdma::rcconn::RdmaRcConn;
-use crate::rdma::one_side::OneSideComm;
+// use crate::rdma::one_side::OneSideComm;
 use crate::rdma::two_sides::TwoSidesComm;
 use crate::rdma::RdmaSendCallback;
-use crate::{MAX_REQ_SIZE, MAX_RESP_SIZE, MAX_SEND_SIZE};
+// use crate::{MAX_REQ_SIZE, MAX_RESP_SIZE};
+
+use super::rpc_shared_buffer::RpcBufAllocator;
 
 use super::rpc::{AsyncRpc, RpcProcessMeta};
 use super::rpc::RpcHeaderMeta;
@@ -29,7 +30,7 @@ pub struct ReplyMeta {
 }
 
 impl ReplyMeta {
-    fn new(routine_num: u64) -> Self {
+    fn new(routine_num: u32) -> Self {
         let mut bufs = Vec::new();
         let mut counts = Vec::new();
 
@@ -45,7 +46,7 @@ impl ReplyMeta {
 }
 
 pub struct AsyncScheduler<'a> {
-    allocator:    Arc<LockedHeap>,
+    allocator:    Mutex<RpcBufAllocator>,
     conns:        RwLock<HashMap<u64, Arc<Mutex<RdmaRcConn<'a>>>>>,
     //  read / write (one-side primitives)
     // pending for coroutines
@@ -63,13 +64,13 @@ unsafe impl<'a> Send for AsyncScheduler<'a> {}
 unsafe impl<'a> Sync for AsyncScheduler<'a> {}
 
 impl<'a> AsyncScheduler<'a> {
-    pub fn new(routine_num: u64, allocator: &Arc<LockedHeap>) -> Self {
+    pub fn new(routine_num: u32, allocator: &Arc<LockedHeap>) -> Self {
         let mut pendings = Vec::new();
         for _ in 0..routine_num {
             pendings.push(0);
         }
         Self {
-            allocator:    allocator.clone(),
+            allocator:    Mutex::new(RpcBufAllocator::new(routine_num, allocator)),
             conns:        RwLock::new(HashMap::new()),
             pendings:     Mutex::new(pendings),
             reply_metas:  Mutex::new(ReplyMeta::new(routine_num)),
@@ -144,16 +145,16 @@ impl<'a> AsyncScheduler<'a> {
         }
     }
 
-    pub fn free_reply_buf(&self, addr: *mut u8, size: usize) {
-        let layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::align_of::<usize>()).unwrap();
-        // unsafe { self.allocator.alloc(layout) }
-        unsafe { self.allocator.dealloc(addr.sub(4), layout) };
-    }
+    // pub fn free_reply_buf(&self, addr: *mut u8, size: usize) {
+    //     let layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::align_of::<usize>()).unwrap();
+    //     // unsafe { self.allocator.alloc(layout) }
+    //     unsafe { self.allocator.dealloc(addr.sub(4), layout) };
+    // }
 
-    pub fn free_req_buf(&self, addr: *mut u8, size: usize) {
-        let layout = Layout::from_size_align(MAX_REQ_SIZE, std::mem::align_of::<usize>()).unwrap();
-        unsafe { self.allocator.dealloc(addr.sub(4), layout) };
-    }
+    // pub fn free_req_buf(&self, addr: *mut u8, size: usize) {
+    //     let layout = Layout::from_size_align(MAX_REQ_SIZE, std::mem::align_of::<usize>()).unwrap();
+    //     unsafe { self.allocator.dealloc(addr.sub(4), layout) };
+    // }
 
     pub fn flush_pending(&self) {
         let guard = self.conns.read().unwrap();
@@ -212,17 +213,20 @@ impl<'a> RdmaRecvCallback for AsyncScheduler<'a> {
 impl<'a> AsyncRpc for AsyncScheduler<'a> {
     fn get_reply_buf(&self) -> *mut u8 {
         // std::ptr::null_mut()
-        let layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::align_of::<usize>()).unwrap();
-        let buf = unsafe { self.allocator.alloc(layout) };
+        // let layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::align_of::<usize>()).unwrap();
+        // let buf = unsafe { self.allocator.alloc(layout) };
+        let buf = self.allocator.lock().unwrap().get_reply_buf();
         unsafe { buf.add(4) }
     }
 
-    fn get_req_buf(&self) -> *mut u8 {
-        let layout = Layout::from_size_align(MAX_SEND_SIZE, std::mem::align_of::<usize>()).unwrap();
-        let buf = unsafe { self.allocator.alloc(layout) };
+    fn get_req_buf(&self, cid: u32) -> *mut u8 {
+        // let layout = Layout::from_size_align(MAX_REQ_SIZE, std::mem::align_of::<usize>()).unwrap();
+        // let buf = unsafe { self.allocator.alloc(layout) };
+        let buf = self.allocator.lock().unwrap().get_req_buf(cid);
         unsafe { buf.add(4) }
     }
 
+    #[allow(unused_variables)]
     fn send_reply(
             &self,
             src_conn: &mut RdmaRcConn,
@@ -237,6 +241,7 @@ impl<'a> AsyncRpc for AsyncScheduler<'a> {
         src_conn.send_pending(unsafe { msg.sub(4) as _ }, rpc_size + 4).unwrap();
     }
 
+    #[allow(unused_variables)]
     fn append_pending_req(
             &self,
             msg:      *mut u8,
@@ -255,6 +260,7 @@ impl<'a> AsyncRpc for AsyncScheduler<'a> {
         conn.lock().unwrap().send_pending(unsafe { msg.sub(4) as _ }, rpc_size + 4).unwrap();
     }
 
+    #[allow(unused_variables)]
     fn append_req(
             &self,
             msg:      *mut u8,
@@ -277,7 +283,7 @@ impl<'a> AsyncRpc for AsyncScheduler<'a> {
 // Async waiter
 impl<'a> AsyncScheduler<'a> {
     pub async fn yield_now(&self, cid: u32) {
-        // println!("yield: {}", cid);
+        // println!("yield: {}", _cid);
         tokio::task::yield_now().await;
     }
 

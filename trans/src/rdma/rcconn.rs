@@ -1,5 +1,5 @@
 use std::alloc::Layout;
-use std::sync::{Mutex, MutexGuard};
+// use std::sync::{Mutex, MutexGuard};
 use std::sync::{Arc, Weak};
 
 use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;

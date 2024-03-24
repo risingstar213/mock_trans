@@ -65,7 +65,7 @@ impl RpcProcessMeta {
 
 pub trait AsyncRpc {
     fn get_reply_buf(&self) -> *mut u8;
-    fn get_req_buf(&self) -> *mut u8;
+    fn get_req_buf(&self, cid: u32) -> *mut u8;
 
     fn send_reply(
         &self,
