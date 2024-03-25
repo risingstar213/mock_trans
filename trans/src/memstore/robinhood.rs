@@ -1,3 +1,4 @@
+use std::collections::btree_map::Values;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hasher};
 use std::hash::RandomState;
@@ -65,25 +66,59 @@ where
     }
 }
 
-pub struct RobinHood<K, V, S = RandomState> 
+
+// TODO: link lists
+#[allow(unused)]
+struct OverflowBuckets<K, V>
+where 
+    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Clone + Send + Sync,
+{
+    keys:   Vec<K>,
+    values: Vec<V>
+}
+
+#[allow(unused)]
+impl<K, V> OverflowBuckets<K, V> 
+where 
+    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Clone + Send + Sync,
+{
+    pub fn new() -> Self {
+        Self {
+            keys:   Vec::new(),
+            values: Vec::new()
+        }
+    }
+
+    pub fn push(&mut self, key: &K, value: &V) {
+        self.keys.push(*key);
+        self.values.push(value.clone());
+    }
+
+}
+
+// TODO: overflow chains
+pub struct RobinHood<K, V> 
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Clone + Send + Sync,
-    S: BuildHasher
 {
     metas:        Vec<RobinHoodMeta<K>>,
     data:         Vec<V>,
-    size:         usize,
-    hash_builder: S,
+    dib_max:      usize, 
+    inbuf_size:   usize,
+    // TODO: simple linked buckets
+    of_buckets:   HashMap<K, V>,
+    hash_builder: RandomState,
 }
 
-impl<K, V, S> RobinHood<K, V, S> 
+impl<K, V> RobinHood<K, V> 
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Clone + Send + Sync,
-    S: BuildHasher
 {
-    pub fn new(size: usize, hasher: S) -> Self {
+    pub fn new(size: usize, dib_max: usize) -> Self {
         let mut data = Vec::new();
         let mut metas = Vec::new();
 
@@ -93,10 +128,12 @@ where
         }
         
         Self {
-            data:         data,
             metas:        metas,
-            size:         0,
-            hash_builder: hasher
+            data:         data,
+            dib_max:      dib_max,
+            inbuf_size:   0,
+            of_buckets:   HashMap::<K, V>::new(),
+            hash_builder: RandomState::new()
         }
     }
     
@@ -109,6 +146,10 @@ where
     }
     
     pub fn get(&self, key: &K) -> Option<&V> {
+        if let Some(value) = self.of_buckets.get(key) {
+            return Some(value);
+        }
+
         let capacity = self.metas.len();
         let inds = self.hash(key);
         let mut ind = inds;
@@ -135,6 +176,12 @@ where
 
     pub fn put(&mut self, key: &K, value: &V) {
         let capacity = self.metas.len();
+
+        if self.inbuf_size >= capacity {
+            self.of_buckets.insert(*key, value.clone());
+            return;
+        }
+
         let inds = self.hash(key);
         let mut ind = inds;
 
@@ -142,18 +189,27 @@ where
         let mut now_dib = 0;
         let mut now_data = value.clone();
         let mut update_list = UpdateList::<K, V>::new();
+
+        let mut insert_last = false;
+
         loop {
-            let slot = &self.metas[ind];
-            if !slot.valid {
-                // let meta = update_list.metas.last().unwrap();
-                // let data = update_list
+            if now_dib >= self.dib_max {
+                self.of_buckets.insert(now_key, now_data.clone());
+
+                insert_last = true;
+            } else if !self.metas[ind].valid {
                 self.metas[ind] = RobinHoodMeta::new(
                     true,
                     now_key,
                     now_dib
                 );
                 self.data[ind] = now_data.clone();
+                self.inbuf_size += 1;
 
+                insert_last = true;
+            }
+
+            if insert_last {
                 if update_list.metas.len() > 0 {
                     for i in (0..update_list.metas.len()).rev() {
 
@@ -169,7 +225,7 @@ where
                 return;
             }
 
-            if slot.dib <= now_dib {
+            if self.metas[ind].dib <= now_dib {
                 update_list.metas.push(RobinHoodMeta::new(
                     true,
                     now_key,
@@ -178,8 +234,8 @@ where
                 update_list.data.push(now_data.clone());
                 update_list.idx.push(ind);
 
-                now_key = slot.key;
-                now_dib = slot.dib;
+                now_key = self.metas[ind].key;
+                now_dib = self.metas[ind].dib;
                 now_data = self.data[ind].clone();
             }
 
@@ -193,7 +249,7 @@ where
     }
 
     #[inline]
-    fn get_index(&self, key: &K) -> Option<usize> {
+    fn get_index_inbuf(&self, key: &K) -> Option<usize> {
         let capacity = self.metas.len();
         let inds = self.hash(key);
         let mut ind = inds;
@@ -218,9 +274,13 @@ where
     }
 
     pub fn erase(&mut self, key: &K) -> Option<V> {
-        // todo!()
+
+        if let Some(value) = self.of_buckets.remove(key) {
+            return Some(value);
+        }
+
         let capacity = self.metas.len();
-        if let Some(mut ind) = self.get_index(key) {
+        if let Some(mut ind) = self.get_index_inbuf(key) {
             let old_value = self.data[ind].clone();
             // back shift
             loop {
@@ -232,6 +292,7 @@ where
                 if !self.metas[next_ind].valid || self.metas[next_ind].dib == 0 {
                     self.metas[ind] = RobinHoodMeta::default();
                     self.data[ind] = unsafe { std::mem::zeroed() };
+                    self.inbuf_size -= 1;
                     return Some(old_value);
                 }
 
@@ -249,10 +310,9 @@ where
     }
 }
 
-impl<V, S> RobinHood<usize, V, S>
+impl<V> RobinHood<usize, V>
 where
     V: Clone + Send + Sync,
-    S: BuildHasher
 {
     pub fn print_store(&self) {
         let capacity = self.metas.len();
@@ -295,17 +355,17 @@ pub fn stress_sequential(steps: usize) {
     ];
 
     let mut rng = thread_rng();
-    let mut map = RobinHood::<usize, usize>::new(100, RandomState::new());
+    let mut map = RobinHood::<usize, usize>::new(1000, 4);
     let mut hashmap = HashMap::<usize, usize>::new();
 
     for i in 0..steps {
         let op = ops.choose(&mut rng).unwrap();
 
         let count = hashmap.len();
-        if count >= 95 && *op == Ops::Insert {
-            // println!("interation {}: skip the insert!", i);
-            continue;
-        }
+        // if count >= 95 && *op == Ops::Insert {
+        //     // println!("interation {}: skip the insert!", i);
+        //     continue;
+        // }
 
         match op {
             Ops::LookupSome => {

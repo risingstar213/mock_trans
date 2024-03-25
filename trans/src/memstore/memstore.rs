@@ -1,12 +1,9 @@
 use std::sync::atomic::AtomicU64;
 
-
-
 #[repr(C)]
-struct MemNode {
+pub struct MemNode {
     lock: AtomicU64,
     seq:  u64,
-    
 }
 
 pub trait MemStore {
