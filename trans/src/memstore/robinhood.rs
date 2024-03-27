@@ -6,65 +6,106 @@ use std::hash::Hash;
 
 use rand::prelude::*;
 
-struct UpdateList<K, V> 
+#[repr(C)]
+#[derive(Clone)]
+struct RobinHoodUnit<K, V>
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Clone + Send + Sync,
-{
-    metas: Vec<RobinHoodMeta<K>>,
-    data:  Vec<V>,
-    idx:   Vec<usize>,
-}
-
-impl<K, V> UpdateList<K, V>
-where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Clone + Send + Sync, 
-{
-    fn new() -> Self {
-        Self {
-            metas: Vec::new(),
-            data:  Vec::new(),
-            idx:   Vec::new()
-        }
-    }
-}
-
-#[derive(Copy, Clone)]
-struct RobinHoodMeta<K>
-where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Send + Sync,
 {
     valid:  bool,
     key:    K,
     dib:    usize,
+    value:  V
 }
 
-impl<K> Default for RobinHoodMeta<K>
+impl<K, V> Default for RobinHoodUnit<K, V> 
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Send + Sync, 
 {
     fn default() -> Self {
         Self {
             valid: false,
             key:   unsafe { std::mem::zeroed() },
             dib:   0,
+            value: unsafe { std::mem::zeroed() }
         }
     }
 }
 
-impl<K> RobinHoodMeta<K>
+impl<K, V> RobinHoodUnit<K, V>
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Send + Sync,
 {
-    pub fn new(valid: bool, key: K, dib: usize) -> Self {
+    fn new(valid: bool, key: K, dib: usize, value: V) -> Self {
         Self {
             valid: valid,
             key:   key,
             dib:   dib,
+            value: value
         }
     }
 }
+
+struct UpdateList<K, V> 
+where
+    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Send + Sync,
+{
+    units: Vec<RobinHoodUnit<K, V>>,
+    idx:   Vec<usize>,
+}
+
+impl<K, V> UpdateList<K, V>
+where
+    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Send + Sync, 
+{
+    fn new() -> Self {
+        Self {
+            units: Vec::new(),
+            idx:   Vec::new()
+        }
+    }
+}
+
+// #[derive(Copy, Clone)]
+// struct RobinHoodMeta<K>
+// where
+//     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+// {
+//     valid:  bool,
+//     key:    K,
+//     dib:    usize,
+// }
+
+// impl<K> Default for RobinHoodMeta<K>
+// where
+//     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+// {
+//     fn default() -> Self {
+//         Self {
+//             valid: false,
+//             key:   unsafe { std::mem::zeroed() },
+//             dib:   0,
+//         }
+//     }
+// }
+
+// impl<K> RobinHoodMeta<K>
+// where
+//     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+// {
+//     pub fn new(valid: bool, key: K, dib: usize) -> Self {
+//         Self {
+//             valid: valid,
+//             key:   key,
+//             dib:   dib,
+//         }
+//     }
+// }
 
 
 // TODO: link lists
@@ -91,21 +132,24 @@ where
         }
     }
 
-    pub fn push(&mut self, key: &K, value: &V) {
+    pub fn push(&mut self, key: &K, value: V) {
         self.keys.push(*key);
-        self.values.push(value.clone());
+        self.values.push(value);
     }
 
 }
 
-// TODO: overflow chains
+/// TODO: overflow chains
+/// Need uniform marks 
+/// But the size is restricted.
+/// How to implement?
 pub struct RobinHood<K, V> 
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Clone + Send + Sync,
 {
-    metas:        Vec<RobinHoodMeta<K>>,
-    data:         Vec<V>,
+    units:        Vec<RobinHoodUnit<K, V>>,
+    inbuf_cap:    usize,
     dib_max:      usize, 
     inbuf_size:   usize,
     // TODO: simple linked buckets
@@ -119,17 +163,15 @@ where
     V: Clone + Send + Sync,
 {
     pub fn new(size: usize, dib_max: usize) -> Self {
-        let mut data = Vec::new();
-        let mut metas = Vec::new();
+        let mut units = Vec::with_capacity(size);
 
         for _ in 0..size {
-            data.push(unsafe { std::mem::zeroed() });
-            metas.push(RobinHoodMeta::default());
+            units.push(RobinHoodUnit::default());
         }
         
         Self {
-            metas:        metas,
-            data:         data,
+            units:        units,
+            inbuf_cap:    size,
             dib_max:      dib_max,
             inbuf_size:   0,
             of_buckets:   HashMap::<K, V>::new(),
@@ -141,8 +183,7 @@ where
         let mut hasher = self.hash_builder.build_hasher();
         key.hash(&mut hasher);
 
-        let capacity = self.metas.len();
-        hasher.finish() as usize % capacity
+        hasher.finish() as usize % self.inbuf_cap
     }
     
     pub fn get(&self, key: &K) -> Option<&V> {
@@ -150,17 +191,17 @@ where
             return Some(value);
         }
 
-        let capacity = self.metas.len();
+        let capacity = self.inbuf_cap;
         let inds = self.hash(key);
         let mut ind = inds;
 
         loop {
-            if !self.metas[ind].valid {
+            if !self.units[ind].valid {
                 return None;
             }
 
-            if self.metas[ind].key.eq(key) {
-                return Some(&self.data[ind]);
+            if self.units[ind].key.eq(key) {
+                return Some(&self.units[ind].value);
             }
 
             ind += 1;
@@ -174,11 +215,23 @@ where
         }
     }
 
-    pub fn put(&mut self, key: &K, value: &V) {
-        let capacity = self.metas.len();
+    #[inline]
+    fn update_with_list(&mut self, update_list: &mut UpdateList<K, V>) {
+        let update_length = update_list.units.len();
+        if update_length > 0 {
+            for i in (0..update_length).rev() {
+                let idx = update_list.idx[i];
+                std::mem::swap(&mut self.units[idx], &mut update_list.units[i]);
+            }
+        }
+        return;
+    }
+
+    pub fn put(&mut self, key: &K, value: V) {
+        let capacity = self.inbuf_cap;
 
         if self.inbuf_size >= capacity {
-            self.of_buckets.insert(*key, value.clone());
+            self.of_buckets.insert(*key, value);
             return;
         }
 
@@ -187,56 +240,40 @@ where
 
         let mut now_key = *key;
         let mut now_dib = 0;
-        let mut now_data = value.clone();
+        let mut now_data = value;
         let mut update_list = UpdateList::<K, V>::new();
-
-        let mut insert_last = false;
 
         loop {
             if now_dib >= self.dib_max {
-                self.of_buckets.insert(now_key, now_data.clone());
+                self.of_buckets.insert(now_key, now_data);
 
-                insert_last = true;
-            } else if !self.metas[ind].valid {
-                self.metas[ind] = RobinHoodMeta::new(
-                    true,
-                    now_key,
-                    now_dib
-                );
-                self.data[ind] = now_data.clone();
-                self.inbuf_size += 1;
-
-                insert_last = true;
-            }
-
-            if insert_last {
-                if update_list.metas.len() > 0 {
-                    for i in (0..update_list.metas.len()).rev() {
-
-                        if update_list.metas[i].key == now_key {
-                            println!("not rational !")
-                        }
-                        let idx = update_list.idx[i];
-
-                        self.metas[idx] = update_list.metas[i];
-                        self.data[idx] = update_list.data[i].clone();
-                    }
-                }
+                self.update_with_list(&mut update_list);
                 return;
-            }
-
-            if self.metas[ind].dib <= now_dib {
-                update_list.metas.push(RobinHoodMeta::new(
+            } else if !self.units[ind].valid {
+                self.units[ind] = RobinHoodUnit::new(
                     true,
                     now_key,
                     now_dib,
+                    now_data
+                );
+                self.inbuf_size += 1;
+
+                self.update_with_list(&mut update_list);
+                return;
+            }
+
+            if self.units[ind].dib <= now_dib {
+                update_list.units.push(RobinHoodUnit::new(
+                    true,
+                    now_key,
+                    now_dib,
+                    now_data.clone(),
                 ));
-                update_list.data.push(now_data.clone());
                 update_list.idx.push(ind);
 
-                now_key = self.metas[ind].key;
-                now_dib = self.metas[ind].dib;
-                now_data = self.data[ind].clone();
+                now_key = self.units[ind].key;
+                now_dib = self.units[ind].dib;
+                now_data = self.units[ind].value.clone();
             }
 
             ind += 1;
@@ -250,15 +287,15 @@ where
 
     #[inline]
     fn get_index_inbuf(&self, key: &K) -> Option<usize> {
-        let capacity = self.metas.len();
+        let capacity = self.inbuf_cap;
         let inds = self.hash(key);
         let mut ind = inds;
 
         loop {
-            if !self.metas[ind].valid {
+            if !self.units[ind].valid {
                 return None;
             }
-            if self.metas[ind].key.eq(key) {
+            if self.units[ind].key.eq(key) {
                 return Some(ind);
             }
 
@@ -279,9 +316,10 @@ where
             return Some(value);
         }
 
-        let capacity = self.metas.len();
+        let capacity = self.inbuf_cap;
         if let Some(mut ind) = self.get_index_inbuf(key) {
-            let old_value = self.data[ind].clone();
+            let old_value = self.units[ind].value.clone();
+            self.units[ind] = RobinHoodUnit::default();
             // back shift
             loop {
                 let mut next_ind = ind + 1;
@@ -289,19 +327,13 @@ where
                     next_ind = 0;
                 }
 
-                if !self.metas[next_ind].valid || self.metas[next_ind].dib == 0 {
-                    self.metas[ind] = RobinHoodMeta::default();
-                    self.data[ind] = unsafe { std::mem::zeroed() };
+                if !self.units[next_ind].valid || self.units[next_ind].dib == 0 {
                     self.inbuf_size -= 1;
                     return Some(old_value);
                 }
 
-                self.metas[ind] = RobinHoodMeta::new(
-                    true,
-                    self.metas[next_ind].key,
-                    self.metas[next_ind].dib - 1,
-                );
-                self.data[ind] = self.data[next_ind].clone();
+                self.units.swap(ind, next_ind);
+                self.units[ind].dib -= 1;
 
                 ind = next_ind;
             }
@@ -315,9 +347,9 @@ where
     V: Clone + Send + Sync,
 {
     pub fn print_store(&self) {
-        let capacity = self.metas.len();
+        let capacity = self.inbuf_cap;
         for i in 0..capacity {
-            print!("({}, {}, {})", self.metas[i].valid, self.metas[i].key, self.metas[i].dib);
+            print!("({}, {}, {})", self.units[i].valid, self.units[i].key, self.units[i].dib);
         }
         println!();
     }
@@ -387,7 +419,7 @@ pub fn stress_sequential(steps: usize) {
                 }
                 let value = rng.gen::<usize>();
                 println!("iteration {}: insert({:?}, {})", i, key, value);
-                let _ = map.put(&key, &value);
+                let _ = map.put(&key, value);
                 hashmap.entry(key).or_insert(value);
 
                 // map.print_store();
