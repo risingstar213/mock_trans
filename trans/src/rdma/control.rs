@@ -11,7 +11,7 @@ use ll_alloc::LockedHeap;
 
 use super::rcconn::{RdmaRcConn};
 
-use crate::{PORTs, TransError, TransResult, MAX_RECV_SIZE, MAX_SEND_SIZE, NPAGES, PEERNUMS};
+use crate::{PORTS, TransError, TransResult, MAX_RECV_SIZE, MAX_SEND_SIZE, NPAGES, PEERNUMS};
 
 #[derive(Clone, Copy, Debug)]
 struct RemoteMeta {

@@ -4,10 +4,9 @@ use byte_struct::*;
 use lazy_static::lazy_static;
 
 use crate::rdma::rcconn::RdmaRcConn;
-use super::scheduler::AsyncScheduler;
 // two-side information
 
-pub mod RpcMsgType {
+pub mod rpc_msg_type {
     pub type Type = u32;
     pub const REQ: Type = 0;
     pub const Y_REQ: Type = 1;
@@ -107,6 +106,7 @@ pub trait RpcHandler {
 pub struct DefaultRpcHandler;
 
 impl RpcHandler for DefaultRpcHandler {
+    #[allow(unused)]
     fn rpc_handler(&self, src_conn: &mut RdmaRcConn, rpc_id: u32, msg: *mut u8, size: u32, meta: RpcProcessMeta) {
         unimplemented!("rpc handler");
     }
@@ -126,5 +126,5 @@ fn test_bitfield() {
 
     let meta = header.to_raw();
 
-    dbg!(header);
+    dbg!(header, meta);
 }

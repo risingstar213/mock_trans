@@ -18,7 +18,7 @@ use super::rpc_shared_buffer::RpcBufAllocator;
 use super::rpc::{AsyncRpc, RpcProcessMeta};
 use super::rpc::RpcHeaderMeta;
 use super::rpc::RpcHandler;
-use super::rpc::RpcMsgType;
+use super::rpc::rpc_msg_type;
 use super::rpc::DEFAULT_RPC_HANDLER;
 
 // process send / read / write saparately
@@ -97,6 +97,7 @@ impl<'a> AsyncScheduler<'a> {
 }
 
 impl<'a> RdmaSendCallback for AsyncScheduler<'a> {
+    #[allow(unused)]
     fn rdma_send_handler(&self, wr_id: u64) {
         todo!();
         // update pending and signal
@@ -170,7 +171,7 @@ impl<'a> RdmaRecvCallback for AsyncScheduler<'a> {
         let meta = RpcHeaderMeta::from_header(unsafe { *(msg as *mut u32) });
 
         match meta.rpc_type {
-            RpcMsgType::REQ  => {
+            rpc_msg_type::REQ  => {
                 let callback = &self.callback;
                 let process_meta = RpcProcessMeta::new(
                     meta.rpc_cid,
@@ -185,10 +186,10 @@ impl<'a> RdmaRecvCallback for AsyncScheduler<'a> {
                     process_meta
                 );
             },
-            RpcMsgType::Y_REQ => {
+            rpc_msg_type::Y_REQ => {
                 unimplemented!("yreq type is not allowed for time being");
             },
-            RpcMsgType::RESP => {
+            rpc_msg_type::RESP => {
                 let index = meta.rpc_cid as usize;
                 let mut reply_metas = self.reply_metas.lock().unwrap();
 
@@ -237,7 +238,7 @@ impl<'a> AsyncRpc for AsyncScheduler<'a> {
             peer_id: u64,
             peer_tid: u64,
         ) {
-        Self::prepare_msg_header(msg, rpc_id, rpc_size, rpc_cid, RpcMsgType::RESP);
+        Self::prepare_msg_header(msg, rpc_id, rpc_size, rpc_cid, rpc_msg_type::RESP);
         src_conn.send_pending(unsafe { msg.sub(4) as _ }, rpc_size + 4).unwrap();
     }
 

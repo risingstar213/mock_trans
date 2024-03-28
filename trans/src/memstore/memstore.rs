@@ -1,34 +1,58 @@
 use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
+use std::cell::UnsafeCell;
+
+// just marker trait
+pub trait MemStoreValue: Clone + Send + Sync {}
 
 #[repr(C)]
 pub struct MemNode<T>
 where 
-    T: Clone + Send + Sync
+    T: MemStoreValue
 {
     lock:  AtomicU64,
-    seq:   u64,
-    value: T,
+    seq:   AtomicU64,
+    // temporary
+    value: UnsafeCell<T>,
 }
+
+unsafe impl<T> Send for MemNode<T> where T: MemStoreValue {}
+unsafe impl<T> Sync for MemNode<T> where T: MemStoreValue {}
 
 impl<T> Clone for MemNode<T>
 where
-    T: Clone + Send + Sync
+    T: MemStoreValue
 {
     fn clone(&self) -> Self {
         Self {
             lock:  AtomicU64::from(self.lock.load(Ordering::Acquire)),
-            seq:   self.seq,
-            value: self.value.clone(),
+            seq:   AtomicU64::from(self.seq.load(Ordering::Acquire)),
+            value: UnsafeCell::new(unsafe { (*self.value.get()).clone() }),
         }
     }
 }
 
 impl<T> MemNode<T>
 where
-    T: Clone + Send + Sync
+    T: MemStoreValue
 {
-    pub fn try_lock_up(&self, lock_sig: u64) -> bool {
+    pub fn new(lock: u64, seq: u64, value: &T) -> Self {
+        Self {
+            lock:  AtomicU64::from(lock),
+            seq:   AtomicU64::from(seq),
+            value: UnsafeCell::new(value.clone()),
+        }
+    }
+
+    pub fn new_zero(lock: u64, seq: u64) -> Self {
+        Self {
+            lock:  AtomicU64::from(lock),
+            seq:   AtomicU64::from(seq),
+            value: UnsafeCell::new(unsafe { std::mem::zeroed() }),
+        }
+    }
+    
+    pub fn try_lock(&self, lock_sig: u64) -> bool {
         match self.lock.compare_exchange(
             0, 
             lock_sig, 
@@ -44,7 +68,7 @@ where
         }
     }
 
-    pub fn try_release_op(&self, lock_sig: u64) -> bool {
+    pub fn try_unlock(&self, lock_sig: u64) -> bool {
         match self.lock.compare_exchange(
             lock_sig, 
             0, 
@@ -59,9 +83,67 @@ where
             }
         }
     }
+
+    pub fn advance_seq(&self) {
+        self.seq.fetch_add(2, Ordering::AcqRel);
+    }
+
+    pub fn set_value(&self, value: &T) {
+        unsafe {
+            *self.value.get() = value.clone();
+        }
+    }
+
+    pub fn get_lock(&self) -> u64 {
+        self.lock.load(Ordering::Acquire)
+    }
+
+    pub fn get_seq(&self) -> u64 {
+        self.seq.load(Ordering::Acquire)
+    }
+
+    pub fn get_value(&self) -> &T {
+        unsafe {
+            self.value.get().as_mut().unwrap()
+        }
+    }
 }
 
-pub trait MemStore {
-    fn get(&self);
-    fn put(&mut self);
+pub struct MemNodeMeta {
+    pub lock: u64,
+    pub seq:  u64,
+}
+
+impl MemNodeMeta {
+    pub fn new(lock: u64, seq: u64) -> Self{
+        Self {
+            lock: lock,
+            seq:  seq,
+        }
+    }
+}
+
+pub trait MemStore
+{
+    // for remote operation
+    fn lock_shared     (&self);
+    fn unlock_shared   (&self);
+    fn lock_exclusive  (&self);
+    fn unlock_exclusive(&self);
+
+    fn local_get_readonly(&self, key: u64, ptr: *mut u8, len: u32) 
+        -> Option<MemNodeMeta>;
+    fn local_get_for_upd (&self, key: u64, ptr: *mut u8, len: u32, lock_content: u64) 
+        -> Option<MemNodeMeta>;
+    fn local_lock_for_ins(&self, key: u64, lock_content: u64) 
+        -> Option<MemNodeMeta>;
+    fn local_unlock      (&self, key: u64, lock_content: u64) 
+        -> Option<MemNodeMeta>;
+    fn local_advance_seq (&self, key: u64)
+        -> Option<MemNodeMeta>;
+    // update or insert
+    fn local_upd_val     (&self, key: u64, ptr: *const u8, len: u32)
+        -> Option<MemNodeMeta>;
+    fn local_erase       (&self, key: u64)
+        -> Option<MemNodeMeta>;
 }

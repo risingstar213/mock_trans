@@ -1,4 +1,3 @@
-use std::collections::btree_map::Values;
 use std::collections::HashMap;
 use std::hash::{BuildHasher, Hasher};
 use std::hash::RandomState;
@@ -157,6 +156,7 @@ where
     hash_builder: RandomState,
 }
 
+// (TODO:) expose memory to support one-side rdma primitives and dma functions
 impl<K, V> RobinHood<K, V> 
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
@@ -178,6 +178,14 @@ where
             hash_builder: RandomState::new()
         }
     }
+
+    pub fn from_raw(size: usize, dib_max: usize) -> Self {
+        Self::new(size, dib_max)
+    }
+
+    pub fn into_raw(&self) -> *mut u8 {
+        std::ptr::null_mut()
+    }
     
     fn hash(&self, key: &K) -> usize {
         let mut hasher = self.hash_builder.build_hasher();
@@ -186,6 +194,7 @@ where
         hasher.finish() as usize % self.inbuf_cap
     }
     
+    // lookup for read or update
     pub fn get(&self, key: &K) -> Option<&V> {
         if let Some(value) = self.of_buckets.get(key) {
             return Some(value);
@@ -227,11 +236,12 @@ where
         return;
     }
 
-    pub fn put(&mut self, key: &K, value: V) {
+    // insert
+    pub fn put(&mut self, key: &K, value: &V) {
         let capacity = self.inbuf_cap;
 
         if self.inbuf_size >= capacity {
-            self.of_buckets.insert(*key, value);
+            self.of_buckets.insert(*key, value.clone());
             return;
         }
 
@@ -240,7 +250,7 @@ where
 
         let mut now_key = *key;
         let mut now_dib = 0;
-        let mut now_data = value;
+        let mut now_data = value.clone();
         let mut update_list = UpdateList::<K, V>::new();
 
         loop {
@@ -310,6 +320,7 @@ where
         }
     }
 
+    // delete
     pub fn erase(&mut self, key: &K) -> Option<V> {
 
         if let Some(value) = self.of_buckets.remove(key) {
@@ -368,7 +379,7 @@ impl RandGen for usize {
     }
 }
 
-pub fn stress_sequential(steps: usize) {
+fn stress_sequential(steps: usize) {
     #[derive(Debug, Eq, PartialEq)]
     enum Ops {
         LookupSome,
@@ -419,7 +430,7 @@ pub fn stress_sequential(steps: usize) {
                 }
                 let value = rng.gen::<usize>();
                 println!("iteration {}: insert({:?}, {})", i, key, value);
-                let _ = map.put(&key, value);
+                let _ = map.put(&key, &value);
                 hashmap.entry(key).or_insert(value);
 
                 // map.print_store();

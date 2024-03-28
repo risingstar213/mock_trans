@@ -11,6 +11,7 @@ use super::{RdmaRecvCallback, RdmaSendCallback};
 use super::{DEFAULT_RDMA_RECV_HANDLER, DEFAULT_RDMA_SEND_HANDLER};
 use super::{one_side::OneSideComm, two_sides::TwoSidesComm};
 
+#[allow(unused)]
 struct RdmaRcMeta {
     conn_id: *mut rdma_cm_id,
     lm: *mut u8,

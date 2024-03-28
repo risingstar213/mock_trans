@@ -6,7 +6,7 @@ use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
 // use trans::rdma::two_sides::TwoSidesComm;
 
-use trans::framework::rpc::{AsyncRpc, RpcHandler, RpcMsgType};
+use trans::framework::rpc::{AsyncRpc, RpcHandler, rpc_msg_type};
 use trans::framework::scheduler::AsyncScheduler;
 use trans::framework::worker::AsyncWorker;
 
@@ -55,7 +55,7 @@ impl<'a> AskServerWorker<'a> {
                 ADD_ID, 
                 size as _, 
                 cid, 
-                RpcMsgType::REQ, 
+                rpc_msg_type::REQ, 
                 1, 
                 0);
             println!("send req {:} {:}", i + 1, i * 2);
@@ -90,6 +90,7 @@ impl<'a> AsyncWorker<'a> for AskServerWorker<'a> {
 }
 
 impl<'a> RpcHandler for AskServerWorker<'a> {
+    #[allow(unused)]
     fn rpc_handler(&self, src_conn: &mut RdmaRcConn, rpc_id: u32, msg: *mut u8, size: u32, meta: trans::framework::rpc::RpcProcessMeta) {
         unimplemented!();
     }

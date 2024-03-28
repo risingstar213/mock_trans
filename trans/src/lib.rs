@@ -5,7 +5,6 @@ pub mod framework;
 pub mod memstore;
 pub mod occ;
 
-#[allow(unused)]
 #[derive(Debug)]
 pub enum TransError {
     TransRdmaError,
@@ -15,11 +14,10 @@ pub enum TransError {
 
 type TransResult<T> = Result<T, TransError>;
 
-
 // connection info
 const PEERNUMS:u64 = 2;
-const SERVERs: [&str; 2] = ["10.10.10.6\0", "10.10.10.9\0"];
-const PORTs: [&str; 2] = ["7471\0", "7472\0"];
+const SERVERS: [&str; 2] = ["10.10.10.6\0", "10.10.10.9\0"];
+const PORTS: [&str; 2] = ["7471\0", "7472\0"];
 
 // mem info
 const NPAGES: u64 = 8;
