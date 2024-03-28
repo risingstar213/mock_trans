@@ -6,60 +6,66 @@ use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
 use trans::rdma::two_sides::TwoSidesComm;
 
+use trans::framework::rpc::AsyncRpc;
 use trans::framework::rpc::{RpcHandler, RpcProcessMeta};
 use trans::framework::scheduler::AsyncScheduler;
 use trans::framework::worker::AsyncWorker;
-use trans::framework::rpc::AsyncRpc;
 
 #[repr(C)]
 pub struct AddRequest {
-    a : u8,
-    b : u8,
+    a: u8,
+    b: u8,
 }
 
 #[repr(C)]
 pub struct AddResponse {
-    sum : u8
+    sum: u8,
 }
 
 const ADD_ID: u32 = 0;
 
 struct AnswerClientWorker<'a> {
     scheduler: Arc<AsyncScheduler<'a>>,
-    number:    Mutex<u64>,
+    number: Mutex<u64>,
 }
 
 impl<'a> AnswerClientWorker<'a> {
     fn new(scheduler: &Arc<AsyncScheduler<'a>>) -> Self {
         Self {
             scheduler: scheduler.clone(),
-            number:    Mutex::new(0),
+            number: Mutex::new(0),
         }
     }
 }
 
 // RPC handlers
 impl<'a> AnswerClientWorker<'a> {
-    fn add_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8, size: u32, meta: RpcProcessMeta) {
+    fn add_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta,
+    ) {
         let req = msg as *mut AddRequest;
         let a = unsafe { (*req).a };
         let b = unsafe { (*req).b };
         println!("get add request {:} {:}", a, b);
-    
+
         let size = std::mem::size_of::<AddResponse>();
         let addr = self.scheduler.get_reply_buf();
         unsafe {
             (*(addr as *mut AddResponse)).sum = a + b;
         }
-        
+
         self.scheduler.send_reply(
-            src_conn, 
+            src_conn,
             addr as _,
             ADD_ID,
             size as _,
             meta.rpc_cid,
             meta.peer_id,
-            meta.peer_tid
+            meta.peer_tid,
         );
 
         *self.number.lock().unwrap() += 1;
@@ -67,7 +73,14 @@ impl<'a> AnswerClientWorker<'a> {
 }
 
 impl<'a> RpcHandler for AnswerClientWorker<'a> {
-    fn rpc_handler(&self, src_conn: &mut RdmaRcConn, rpc_id: u32, msg: *mut u8, size: u32, meta: RpcProcessMeta) {
+    fn rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        rpc_id: u32,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta,
+    ) {
         match rpc_id {
             ADD_ID => {
                 self.add_handler(src_conn, msg, size, meta);
@@ -106,7 +119,10 @@ async fn main() {
     conn.lock().unwrap().init_and_start_recvs().unwrap();
 
     scheduler.append_conn(0, &conn);
-    conn.lock().unwrap().register_recv_callback(&scheduler).unwrap();
+    conn.lock()
+        .unwrap()
+        .register_recv_callback(&scheduler)
+        .unwrap();
 
     let worker = Arc::new(AnswerClientWorker::new(&scheduler));
     scheduler.register_callback(&worker);
@@ -115,6 +131,8 @@ async fn main() {
         let worker0 = worker.clone();
         tokio::task::spawn(async move {
             worker0.main_routine().await;
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 }

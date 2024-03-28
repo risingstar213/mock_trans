@@ -26,10 +26,10 @@ bitfields!(
 impl RpcHeaderMeta {
     pub fn new(rpc_type: u32, rpc_id: u32, rpc_payload: u32, rpc_cid: u32) -> Self {
         Self {
-            rpc_type:    rpc_type,
-            rpc_id:      rpc_id,
+            rpc_type: rpc_type,
+            rpc_id: rpc_id,
             rpc_payload: rpc_payload,
-            rpc_cid:     rpc_cid
+            rpc_cid: rpc_cid,
         }
     }
 
@@ -53,7 +53,7 @@ impl RpcProcessMeta {
         Self {
             rpc_cid: rpc_cid,
             peer_id: peer_id,
-            peer_tid: peer_tid
+            peer_tid: peer_tid,
         }
     }
 }
@@ -68,20 +68,20 @@ pub trait AsyncRpc {
 
     fn send_reply(
         &self,
-        src_conn: &mut RdmaRcConn, 
+        src_conn: &mut RdmaRcConn,
         msg: *mut u8,
-        rpc_id: u32, 
+        rpc_id: u32,
         rpc_size: u32,
         rpc_cid: u32,
         peer_id: u64,
-        peer_tid: u64
+        peer_tid: u64,
     );
     fn append_pending_req(
         &self,
         msg: *mut u8,
-        rpc_id: u32, 
-        rpc_size: u32, 
-        rpc_cid: u32, 
+        rpc_id: u32,
+        rpc_size: u32,
+        rpc_cid: u32,
         rpc_type: u32,
         peer_id: u64,
         peer_tid: u64,
@@ -89,39 +89,52 @@ pub trait AsyncRpc {
     fn append_req(
         &self,
         msg: *mut u8,
-        rpc_id: u32, 
-        rpc_size: u32, 
-        rpc_cid: u32, 
+        rpc_id: u32,
+        rpc_size: u32,
+        rpc_cid: u32,
         rpc_type: u32,
         peer_id: u64,
         peer_tid: u64,
     );
 }
 
-
 pub trait RpcHandler {
-    fn rpc_handler(&self, src_conn: &mut RdmaRcConn, rpc_id: u32, msg: *mut u8, size: u32, meta: RpcProcessMeta);
+    fn rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        rpc_id: u32,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta,
+    );
 }
 
 pub struct DefaultRpcHandler;
 
 impl RpcHandler for DefaultRpcHandler {
     #[allow(unused)]
-    fn rpc_handler(&self, src_conn: &mut RdmaRcConn, rpc_id: u32, msg: *mut u8, size: u32, meta: RpcProcessMeta) {
+    fn rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        rpc_id: u32,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta,
+    ) {
         unimplemented!("rpc handler");
     }
 }
 
-lazy_static!{
+lazy_static! {
     pub static ref DEFAULT_RPC_HANDLER: Arc<DefaultRpcHandler> = Arc::new(DefaultRpcHandler);
 }
 #[test]
 fn test_bitfield() {
     let header = RpcHeaderMeta {
         rpc_type: 1,
-        rpc_id:   2,
+        rpc_id: 2,
         rpc_payload: 345,
-        rpc_cid:  4
+        rpc_cid: 4,
     };
 
     let meta = header.to_raw();

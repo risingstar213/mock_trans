@@ -2,11 +2,12 @@ use std::sync::Arc;
 
 use tokio;
 
-use super::scheduler::AsyncScheduler;
 use super::rpc::AsyncRpc;
+use super::scheduler::AsyncScheduler;
 
 pub trait AsyncWorker<'a>
-    where Self : Send + Sync
+where
+    Self: Send + Sync,
 {
     fn get_scheduler(&self) -> &AsyncScheduler<'a>;
 
@@ -25,7 +26,7 @@ pub trait AsyncWorker<'a>
                 scheduler.poll_recvs();
                 scheduler.poll_sends();
 
-                scheduler.yield_now(0).await;    
+                scheduler.yield_now(0).await;
             }
         }
     }

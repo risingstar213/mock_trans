@@ -8,4 +8,3 @@ pub trait TwoSidesComm {
         self.flush_pending().unwrap();
     }
 }
-

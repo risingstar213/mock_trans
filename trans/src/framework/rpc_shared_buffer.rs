@@ -7,10 +7,10 @@ use crate::{MAX_INFLIGHT_REPLY, MAX_INFLIGHT_REQS, MAX_REQ_SIZE, MAX_RESP_SIZE};
 
 // reused buffer for rpc
 pub struct RpcBufAllocator {
-    req_buf_pool:   Vec<Vec<*mut u8>>,
-    req_heads:      Vec<u32>,
+    req_buf_pool: Vec<Vec<*mut u8>>,
+    req_heads: Vec<u32>,
     reply_buf_pool: Vec<*mut u8>,
-    reply_heads:    u32
+    reply_heads: u32,
 }
 
 impl RpcBufAllocator {
@@ -19,9 +19,10 @@ impl RpcBufAllocator {
         let mut req_heads = Vec::new();
         let mut reply_bufs = Vec::new();
 
-        let req_layout = Layout::from_size_align(MAX_REQ_SIZE, std::mem::size_of::<usize>()).unwrap();
-        let resp_layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::size_of::<usize>()).unwrap();
-
+        let req_layout =
+            Layout::from_size_align(MAX_REQ_SIZE, std::mem::size_of::<usize>()).unwrap();
+        let resp_layout =
+            Layout::from_size_align(MAX_RESP_SIZE, std::mem::size_of::<usize>()).unwrap();
 
         for _ in 0..coroutine_num {
             let mut reqs = Vec::new();
@@ -40,15 +41,18 @@ impl RpcBufAllocator {
         }
 
         Self {
-            req_buf_pool:   req_bufs,
-            req_heads:      req_heads,
+            req_buf_pool: req_bufs,
+            req_heads: req_heads,
             reply_buf_pool: reply_bufs,
-            reply_heads:    0
+            reply_heads: 0,
         }
     }
 
     pub fn get_reply_buf(&mut self) -> *mut u8 {
-        let buf = *self.reply_buf_pool.get::<usize>(self.reply_heads as _).unwrap();
+        let buf = *self
+            .reply_buf_pool
+            .get::<usize>(self.reply_heads as _)
+            .unwrap();
         self.reply_heads += 1;
         if self.reply_heads >= MAX_INFLIGHT_REPLY as u32 {
             self.reply_heads = 0;

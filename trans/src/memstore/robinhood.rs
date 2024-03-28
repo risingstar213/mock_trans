@@ -1,7 +1,7 @@
 use std::collections::HashMap;
-use std::hash::{BuildHasher, Hasher};
-use std::hash::RandomState;
 use std::hash::Hash;
+use std::hash::RandomState;
+use std::hash::{BuildHasher, Hasher};
 
 use rand::prelude::*;
 
@@ -12,23 +12,23 @@ where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Send + Sync,
 {
-    valid:  bool,
-    key:    K,
-    dib:    usize,
-    value:  V
+    valid: bool,
+    key: K,
+    dib: usize,
+    value: V,
 }
 
-impl<K, V> Default for RobinHoodUnit<K, V> 
+impl<K, V> Default for RobinHoodUnit<K, V>
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Send + Sync, 
+    V: Send + Sync,
 {
     fn default() -> Self {
         Self {
             valid: false,
-            key:   unsafe { std::mem::zeroed() },
-            dib:   0,
-            value: unsafe { std::mem::zeroed() }
+            key: unsafe { std::mem::zeroed() },
+            dib: 0,
+            value: unsafe { std::mem::zeroed() },
         }
     }
 }
@@ -41,31 +41,31 @@ where
     fn new(valid: bool, key: K, dib: usize, value: V) -> Self {
         Self {
             valid: valid,
-            key:   key,
-            dib:   dib,
-            value: value
+            key: key,
+            dib: dib,
+            value: value,
         }
     }
 }
 
-struct UpdateList<K, V> 
+struct UpdateList<K, V>
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Send + Sync,
 {
     units: Vec<RobinHoodUnit<K, V>>,
-    idx:   Vec<usize>,
+    idx: Vec<usize>,
 }
 
 impl<K, V> UpdateList<K, V>
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Send + Sync, 
+    V: Send + Sync,
 {
     fn new() -> Self {
         Self {
             units: Vec::new(),
-            idx:   Vec::new()
+            idx: Vec::new(),
         }
     }
 }
@@ -106,28 +106,27 @@ where
 //     }
 // }
 
-
 // TODO: link lists
 #[allow(unused)]
 struct OverflowBuckets<K, V>
-where 
+where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Clone + Send + Sync,
 {
-    keys:   Vec<K>,
-    values: Vec<V>
+    keys: Vec<K>,
+    values: Vec<V>,
 }
 
 #[allow(unused)]
-impl<K, V> OverflowBuckets<K, V> 
-where 
+impl<K, V> OverflowBuckets<K, V>
+where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Clone + Send + Sync,
 {
     pub fn new() -> Self {
         Self {
-            keys:   Vec::new(),
-            values: Vec::new()
+            keys: Vec::new(),
+            values: Vec::new(),
         }
     }
 
@@ -135,29 +134,28 @@ where
         self.keys.push(*key);
         self.values.push(value);
     }
-
 }
 
 /// TODO: overflow chains
-/// Need uniform marks 
+/// Need uniform marks
 /// But the size is restricted.
 /// How to implement?
-pub struct RobinHood<K, V> 
+pub struct RobinHood<K, V>
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Clone + Send + Sync,
 {
-    units:        Vec<RobinHoodUnit<K, V>>,
-    inbuf_cap:    usize,
-    dib_max:      usize, 
-    inbuf_size:   usize,
+    units: Vec<RobinHoodUnit<K, V>>,
+    inbuf_cap: usize,
+    dib_max: usize,
+    inbuf_size: usize,
     // TODO: simple linked buckets
-    of_buckets:   HashMap<K, V>,
+    of_buckets: HashMap<K, V>,
     hash_builder: RandomState,
 }
 
 // (TODO:) expose memory to support one-side rdma primitives and dma functions
-impl<K, V> RobinHood<K, V> 
+impl<K, V> RobinHood<K, V>
 where
     K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Clone + Send + Sync,
@@ -168,14 +166,14 @@ where
         for _ in 0..size {
             units.push(RobinHoodUnit::default());
         }
-        
+
         Self {
-            units:        units,
-            inbuf_cap:    size,
-            dib_max:      dib_max,
-            inbuf_size:   0,
-            of_buckets:   HashMap::<K, V>::new(),
-            hash_builder: RandomState::new()
+            units: units,
+            inbuf_cap: size,
+            dib_max: dib_max,
+            inbuf_size: 0,
+            of_buckets: HashMap::<K, V>::new(),
+            hash_builder: RandomState::new(),
         }
     }
 
@@ -186,14 +184,14 @@ where
     pub fn into_raw(&self) -> *mut u8 {
         std::ptr::null_mut()
     }
-    
+
     fn hash(&self, key: &K) -> usize {
         let mut hasher = self.hash_builder.build_hasher();
         key.hash(&mut hasher);
 
         hasher.finish() as usize % self.inbuf_cap
     }
-    
+
     // lookup for read or update
     pub fn get(&self, key: &K) -> Option<&V> {
         if let Some(value) = self.of_buckets.get(key) {
@@ -260,12 +258,7 @@ where
                 self.update_with_list(&mut update_list);
                 return;
             } else if !self.units[ind].valid {
-                self.units[ind] = RobinHoodUnit::new(
-                    true,
-                    now_key,
-                    now_dib,
-                    now_data
-                );
+                self.units[ind] = RobinHoodUnit::new(true, now_key, now_dib, now_data);
                 self.inbuf_size += 1;
 
                 self.update_with_list(&mut update_list);
@@ -322,7 +315,6 @@ where
 
     // delete
     pub fn erase(&mut self, key: &K) -> Option<V> {
-
         if let Some(value) = self.of_buckets.remove(key) {
             return Some(value);
         }
@@ -360,7 +352,10 @@ where
     pub fn print_store(&self) {
         let capacity = self.inbuf_cap;
         for i in 0..capacity {
-            print!("({}, {}, {})", self.units[i].valid, self.units[i].key, self.units[i].dib);
+            print!(
+                "({}, {}, {})",
+                self.units[i].valid, self.units[i].key, self.units[i].dib
+            );
         }
         println!();
     }

@@ -1,22 +1,22 @@
+use libc::sleep;
+use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::thread;
-use libc::sleep;
-use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;
 
 use trans::rdma::control::RdmaControl;
-use trans::rdma::RdmaRecvCallback;
 use trans::rdma::rcconn::RdmaRcConn;
+use trans::rdma::RdmaRecvCallback;
 
 #[repr(C)]
 pub struct AddRequest {
-    a : u8,
-    b : u8,
+    a: u8,
+    b: u8,
 }
 
 #[repr(C)]
 pub struct AddResponse {
-    sum : u8
+    sum: u8,
 }
 
 struct AddRpcProcess {
@@ -25,7 +25,7 @@ struct AddRpcProcess {
 impl RdmaRecvCallback for AddRpcProcess {
     fn rdma_recv_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8) {
         let req = msg as *mut AddResponse;
-        println!("get add response {:}", unsafe { (*req).sum } ) ;
+        println!("get add response {:}", unsafe { (*req).sum });
     }
 }
 
@@ -43,13 +43,16 @@ unsafe impl Sync for AddRpcProcess {}
 #[inline]
 fn send_req(conn: &Arc<Mutex<RdmaRcConn>>, a: u8, b: u8) {
     let size = std::mem::size_of::<AddRequest>();
-        let addr = conn.lock().unwrap().alloc_mr(size).unwrap();
-        unsafe {
-            (*(addr as *mut AddRequest)).a = a;
-            (*(addr as *mut AddRequest)).b = b;
-        }
-        conn.lock().unwrap().post_send(IBV_WR_SEND, addr, size as _, 0, 2, 0, 0).unwrap();
-        println!("send req {:} {:}", a, b);
+    let addr = conn.lock().unwrap().alloc_mr(size).unwrap();
+    unsafe {
+        (*(addr as *mut AddRequest)).a = a;
+        (*(addr as *mut AddRequest)).b = b;
+    }
+    conn.lock()
+        .unwrap()
+        .post_send(IBV_WR_SEND, addr, size as _, 0, 2, 0, 0)
+        .unwrap();
+    println!("send req {:} {:}", a, b);
 }
 
 fn main() {
@@ -60,7 +63,10 @@ fn main() {
     conn.lock().unwrap().init_and_start_recvs().unwrap();
 
     let process = Arc::new(AddRpcProcess::new());
-    conn.lock().unwrap().register_recv_callback( &process).unwrap();
+    conn.lock()
+        .unwrap()
+        .register_recv_callback(&process)
+        .unwrap();
 
     let conn_clone = conn.clone();
     let th = thread::spawn(move || {
@@ -84,5 +90,4 @@ fn main() {
     send_req(&conn, 9, 11);
 
     th.join().unwrap();
-
 }

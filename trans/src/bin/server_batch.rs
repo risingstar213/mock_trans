@@ -4,20 +4,20 @@ use std::sync::Mutex;
 use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;
 use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
-use trans::rdma::RdmaRecvCallback;
 use trans::rdma::two_sides::TwoSidesComm;
+use trans::rdma::RdmaRecvCallback;
 
 use rdma_sys::*;
 
 #[repr(C)]
 pub struct AddRequest {
-    a : u8,
-    b : u8,
+    a: u8,
+    b: u8,
 }
 
 #[repr(C)]
 pub struct AddResponse {
-    sum : u8
+    sum: u8,
 }
 
 struct AddRpcProcess<'a> {
@@ -35,16 +35,14 @@ impl<'a> RdmaRecvCallback for AddRpcProcess<'a> {
         unsafe {
             (*(addr as *mut AddResponse)).sum = a + b;
         }
-        
+
         src_conn.send_pending(addr, size as _).unwrap();
     }
 }
 
 impl<'a> AddRpcProcess<'a> {
     fn new(conn: &Arc<Mutex<RdmaRcConn<'a>>>) -> Self {
-        Self {
-            conn: conn.clone()
-        }
+        Self { conn: conn.clone() }
     }
 }
 
@@ -60,7 +58,10 @@ fn main() {
     conn.lock().unwrap().init_and_start_recvs().unwrap();
 
     let process = Arc::new(AddRpcProcess::new(&conn));
-    conn.lock().unwrap().register_recv_callback( &process).unwrap();
+    conn.lock()
+        .unwrap()
+        .register_recv_callback(&process)
+        .unwrap();
 
     let mut num = 0_i32;
     loop {

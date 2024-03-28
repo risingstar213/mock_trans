@@ -1,6 +1,9 @@
-mod memdb;
-mod memstore;
 mod bplustree;
-mod hashtablecell;
+
 mod hashtable;
+mod hashtablecell;
 mod robinhood;
+
+mod memstore;
+
+pub mod memdb;

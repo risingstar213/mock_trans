@@ -6,33 +6,33 @@ use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
 // use trans::rdma::two_sides::TwoSidesComm;
 
-use trans::framework::rpc::{AsyncRpc, RpcHandler, rpc_msg_type};
+use trans::framework::rpc::{rpc_msg_type, AsyncRpc, RpcHandler};
 use trans::framework::scheduler::AsyncScheduler;
 use trans::framework::worker::AsyncWorker;
 
 #[repr(C)]
 pub struct AddRequest {
-    a : u8,
-    b : u8,
+    a: u8,
+    b: u8,
 }
 
 #[repr(C)]
 pub struct AddResponse {
-    sum : u8
+    sum: u8,
 }
 
 const ADD_ID: u32 = 0;
 
 struct AskServerWorker<'a> {
     scheduler: Arc<AsyncScheduler<'a>>,
-    stopped:   Mutex<bool>
+    stopped: Mutex<bool>,
 }
 
 impl<'a> AskServerWorker<'a> {
     fn new(scheduler: &Arc<AsyncScheduler<'a>>) -> Self {
         Self {
             scheduler: scheduler.clone(),
-            stopped:   Mutex::new(false),
+            stopped: Mutex::new(false),
         }
     }
 }
@@ -51,13 +51,14 @@ impl<'a> AskServerWorker<'a> {
                 (*(req_buf as *mut AddRequest)).b = i * 2;
             }
             self.scheduler.append_pending_req(
-                req_buf, 
-                ADD_ID, 
-                size as _, 
-                cid, 
-                rpc_msg_type::REQ, 
-                1, 
-                0);
+                req_buf,
+                ADD_ID,
+                size as _,
+                cid,
+                rpc_msg_type::REQ,
+                1,
+                0,
+            );
             println!("send req {:} {:}", i + 1, i * 2);
         }
 
@@ -69,13 +70,12 @@ impl<'a> AskServerWorker<'a> {
         let resp_addr = reply_buf as *mut u8;
         for i in 0..10 {
             let reply = unsafe { resp_addr.add(i * resp_size) };
-        
+
             let resp = reply as *mut AddResponse;
-            println!("get add response {:}", unsafe { (*resp).sum } ) ;
+            println!("get add response {:}", unsafe { (*resp).sum });
         }
 
         *self.stopped.lock().unwrap() = true;
-
     }
 }
 
@@ -91,7 +91,14 @@ impl<'a> AsyncWorker<'a> for AskServerWorker<'a> {
 
 impl<'a> RpcHandler for AskServerWorker<'a> {
     #[allow(unused)]
-    fn rpc_handler(&self, src_conn: &mut RdmaRcConn, rpc_id: u32, msg: *mut u8, size: u32, meta: trans::framework::rpc::RpcProcessMeta) {
+    fn rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        rpc_id: u32,
+        msg: *mut u8,
+        size: u32,
+        meta: trans::framework::rpc::RpcProcessMeta,
+    ) {
         unimplemented!();
     }
 }
@@ -108,7 +115,10 @@ async fn main() {
     conn.lock().unwrap().init_and_start_recvs().unwrap();
 
     scheduler.append_conn(1, &conn);
-    conn.lock().unwrap().register_recv_callback(&scheduler).unwrap();
+    conn.lock()
+        .unwrap()
+        .register_recv_callback(&scheduler)
+        .unwrap();
 
     let worker = Arc::new(AskServerWorker::new(&scheduler));
     scheduler.register_callback(&worker);
@@ -122,6 +132,8 @@ async fn main() {
         let worker0 = worker.clone();
         tokio::task::spawn(async move {
             worker0.main_routine().await;
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 }

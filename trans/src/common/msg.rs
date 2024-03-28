@@ -1,16 +1,15 @@
 #![allow(unused)]
 
-use rdma_sys::*;
 use libc::*;
+use rdma_sys::*;
 use std::ptr;
 
 enum MsgType {
     MsgSync, // used for sync for start/end/write/read
     MsgData,
     MsgCmd,
-    MsgAddr
+    MsgAddr,
 }
-
 
 #[inline]
 pub unsafe fn rdma_post_send_with_imm(
@@ -20,7 +19,7 @@ pub unsafe fn rdma_post_send_with_imm(
     length: usize,
     mr: *mut ibv_mr,
     flags: c_int,
-    imm: c_int
+    imm: c_int,
 ) -> c_int {
     let mut sge = ibv_sge {
         addr: addr as u64,
@@ -42,12 +41,11 @@ pub unsafe fn rdma_post_send_with_imm(
     rdma_seterrno(ibv_post_send((*id).qp, &mut wr, &mut bad))
 }
 
-
 pub struct AddRequest {
-    a : u8,
-    b : u8,
+    a: u8,
+    b: u8,
 }
 
 pub struct AddResponse {
-    sum : u8
+    sum: u8,
 }

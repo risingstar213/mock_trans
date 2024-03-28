@@ -10,13 +10,13 @@ use rdma_sys::*;
 
 #[repr(C)]
 pub struct AddRequest {
-    a : u8,
-    b : u8,
+    a: u8,
+    b: u8,
 }
 
 #[repr(C)]
 pub struct AddResponse {
-    sum : u8
+    sum: u8,
 }
 
 struct AddRpcProcess<'a> {
@@ -34,16 +34,16 @@ impl<'a> RdmaRecvCallback for AddRpcProcess<'a> {
         unsafe {
             (*(addr as *mut AddResponse)).sum = a + b;
         }
-        
-        src_conn.post_send(IBV_WR_SEND, addr, size as _, 0, 2, 0, 0).unwrap();
+
+        src_conn
+            .post_send(IBV_WR_SEND, addr, size as _, 0, 2, 0, 0)
+            .unwrap();
     }
 }
 
 impl<'a> AddRpcProcess<'a> {
     fn new(conn: &Arc<Mutex<RdmaRcConn<'a>>>) -> Self {
-        Self {
-            conn: conn.clone()
-        }
+        Self { conn: conn.clone() }
     }
 }
 
@@ -59,7 +59,10 @@ fn main() {
     conn.lock().unwrap().init_and_start_recvs().unwrap();
 
     let process = Arc::new(AddRpcProcess::new(&conn));
-    conn.lock().unwrap().register_recv_callback( &process).unwrap();
+    conn.lock()
+        .unwrap()
+        .register_recv_callback(&process)
+        .unwrap();
 
     let mut num = 0_i32;
     loop {

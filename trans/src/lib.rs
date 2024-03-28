@@ -1,21 +1,21 @@
 pub mod common;
-pub mod rdma;
 pub mod doca_dma;
 pub mod framework;
 pub mod memstore;
 pub mod occ;
+pub mod rdma;
 
 #[derive(Debug)]
 pub enum TransError {
     TransRdmaError,
     TransDocaError,
-    TransSyncError
+    TransSyncError,
 }
 
 type TransResult<T> = Result<T, TransError>;
 
 // connection info
-const PEERNUMS:u64 = 2;
+const PEERNUMS: u64 = 2;
 const SERVERS: [&str; 2] = ["10.10.10.6\0", "10.10.10.9\0"];
 const PORTS: [&str; 2] = ["7471\0", "7472\0"];
 
