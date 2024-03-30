@@ -37,3 +37,7 @@ const MAX_INFLIGHT_REPLY: usize = 32;
 const MAX_INFLIGHT_REQS: usize = 32;
 const MAX_REQ_SIZE: usize = 32;
 const MAX_RESP_SIZE: usize = 128;
+
+/////////////////// MemStore //////////////////////////
+const ROBINHOOD_SIZE:    usize = 2048;
+const ROBINHOOD_DIB_MAX: usize = 8;

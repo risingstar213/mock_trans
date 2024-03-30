@@ -8,7 +8,16 @@ where
     table: HashTableCell<T>,
 }
 
-impl<T> HashTableMemStore<T> where T: MemStoreValue {}
+impl<T> HashTableMemStore<T> 
+where 
+    T: MemStoreValue 
+{
+    pub fn new() -> Self {
+        Self {
+            table: HashTableCell::<T>::new()
+        }
+    }
+}
 
 impl<T> MemStore for HashTableMemStore<T>
 where

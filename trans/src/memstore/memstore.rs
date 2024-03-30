@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::atomic::Ordering;
 
 // just marker trait
-pub trait MemStoreValue: Clone + Send + Sync {}
+pub trait MemStoreValue: Clone + Send + Sync + Default {}
 
 #[repr(C)]
 pub struct MemNode<T>
@@ -32,6 +32,19 @@ where
     }
 }
 
+impl<T> Default for MemNode<T>
+where
+    T: MemStoreValue,
+{
+    fn default() -> Self {
+        Self {
+            lock: AtomicU64::from(0),
+            seq: AtomicU64::from(0),
+            value: UnsafeCell::new(T::default()),
+        }
+    }
+}
+
 impl<T> MemNode<T>
 where
     T: MemStoreValue,
@@ -48,7 +61,7 @@ where
         Self {
             lock: AtomicU64::from(lock),
             seq: AtomicU64::from(seq),
-            value: UnsafeCell::new(unsafe { std::mem::zeroed() }),
+            value: UnsafeCell::new(T::default()),
         }
     }
 

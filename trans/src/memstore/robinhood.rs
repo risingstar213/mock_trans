@@ -9,8 +9,8 @@ use rand::prelude::*;
 #[derive(Clone)]
 struct RobinHoodUnit<K, V>
 where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Send + Sync,
+    K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Default + Send + Sync,
 {
     valid: bool,
     key: K,
@@ -20,23 +20,23 @@ where
 
 impl<K, V> Default for RobinHoodUnit<K, V>
 where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Send + Sync,
+    K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Default + Send + Sync,
 {
     fn default() -> Self {
         Self {
             valid: false,
-            key: unsafe { std::mem::zeroed() },
+            key: K::default(),
             dib: 0,
-            value: unsafe { std::mem::zeroed() },
+            value: V::default(),
         }
     }
 }
 
 impl<K, V> RobinHoodUnit<K, V>
 where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Send + Sync,
+    K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Default + Send + Sync,
 {
     fn new(valid: bool, key: K, dib: usize, value: V) -> Self {
         Self {
@@ -50,8 +50,8 @@ where
 
 struct UpdateList<K, V>
 where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Send + Sync,
+    K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Default + Send + Sync,
 {
     units: Vec<RobinHoodUnit<K, V>>,
     idx: Vec<usize>,
@@ -59,8 +59,8 @@ where
 
 impl<K, V> UpdateList<K, V>
 where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Send + Sync,
+    K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Default + Send + Sync,
 {
     fn new() -> Self {
         Self {
@@ -110,8 +110,8 @@ where
 #[allow(unused)]
 struct OverflowBuckets<K, V>
 where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Clone + Send + Sync,
+    K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Default + Clone + Send + Sync,
 {
     keys: Vec<K>,
     values: Vec<V>,
@@ -120,8 +120,8 @@ where
 #[allow(unused)]
 impl<K, V> OverflowBuckets<K, V>
 where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Clone + Send + Sync,
+    K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Default + Clone + Send + Sync,
 {
     pub fn new() -> Self {
         Self {
@@ -142,8 +142,8 @@ where
 /// How to implement?
 pub struct RobinHood<K, V>
 where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Clone + Send + Sync,
+    K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Default + Clone + Send + Sync,
 {
     units: Vec<RobinHoodUnit<K, V>>,
     inbuf_cap: usize,
@@ -157,8 +157,8 @@ where
 // (TODO:) expose memory to support one-side rdma primitives and dma functions
 impl<K, V> RobinHood<K, V>
 where
-    K: Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
-    V: Clone + Send + Sync,
+    K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
+    V: Default + Clone + Send + Sync,
 {
     pub fn new(size: usize, dib_max: usize) -> Self {
         let mut units = Vec::with_capacity(size);
@@ -347,9 +347,9 @@ where
 
 impl<V> RobinHood<usize, V>
 where
-    V: Clone + Send + Sync,
+    V: Default + Clone + Send + Sync,
 {
-    pub fn print_store(&self) {
+    fn print_store(&self) {
         let capacity = self.inbuf_cap;
         for i in 0..capacity {
             print!(
@@ -361,7 +361,7 @@ where
     }
 }
 
-pub trait RandGen {
+trait RandGen {
     /// Randomly generates a value.
     fn rand_gen(rng: &mut ThreadRng) -> Self;
 }
@@ -428,7 +428,7 @@ fn stress_sequential(steps: usize) {
                 let _ = map.put(&key, &value);
                 hashmap.entry(key).or_insert(value);
 
-                // map.print_store();
+                map.print_store();
             }
             Ops::DeleteSome => {
                 let key = hashmap.keys().choose(&mut rng).map(|k| k.clone());
@@ -436,7 +436,7 @@ fn stress_sequential(steps: usize) {
                     println!("iteration {}: delete({:?}) (existing)", i, key);
                     assert_eq!(map.erase(&key).ok_or(()), hashmap.remove(&key).ok_or(()));
 
-                    // map.print_store();
+                    map.print_store();
                 }
             }
             Ops::DeleteNone => {

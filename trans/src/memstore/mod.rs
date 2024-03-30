@@ -7,3 +7,6 @@ mod robinhood;
 mod memstore;
 
 pub mod memdb;
+
+pub use memstore::MemStoreValue;
+pub use memstore::MemNodeMeta;

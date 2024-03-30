@@ -1,11 +1,11 @@
 use byte_struct::*;
-use std::borrow::Borrow;
-use std::borrow::BorrowMut;
 use std::cell::{Cell, UnsafeCell};
 use std::sync::atomic::{AtomicU32, Ordering};
 
 use super::memstore::{MemNode, MemStoreValue};
 use super::robinhood::RobinHood;
+
+use crate::{ROBINHOOD_SIZE, ROBINHOOD_DIB_MAX};
 
 bitfields!(
     pub VersionRwLock: u32 {
@@ -33,6 +33,13 @@ impl<T> HashTableCell<T>
 where
     T: MemStoreValue,
 {
+    pub fn new() -> Self {
+        Self {
+            rwlock: AtomicU32::new(0),
+            table:  UnsafeCell::new(RobinHood::<u64, MemNode<T>>::new(ROBINHOOD_SIZE, ROBINHOOD_DIB_MAX))
+        }
+    }
+    
     pub fn rlock(&self) {
         loop {
             let old = self.rwlock.load(Ordering::Acquire);
