@@ -59,7 +59,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccLocal<'trans, MAX_ITE
 
             let meta = self.memdb.local_get_meta(item.table_id, item.key).unwrap();
 
-            if meta.lock != 0 || (meta.lock != item.lock) {
+            if meta.lock != 0 || (meta.seq != item.seq) {
                 self.status = OccStatus::OccMustabort;
             }
         }

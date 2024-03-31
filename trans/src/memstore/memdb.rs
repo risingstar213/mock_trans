@@ -1,9 +1,8 @@
 use core::panic;
-use std::hash::Hash;
 
-use super::memstore::{MemNode, MemNodeMeta, MemStore};
-use super::hashtable::HashTableMemStore;
+use super::memstore::{MemNodeMeta, MemStore};
 
+#[allow(unused)]
 pub struct TableSchema {
     k_len: u32,
     v_len: u32,
@@ -31,9 +30,9 @@ impl TableSchema {
 }
 
 pub enum MemStoreType {
-    TAB_NONE,
-    TAB_ROBINHOOD,
-    TAB_BPLUSTREE,
+    TabNone,
+    TableRobinhood,
+    TabBplustree,
 }
 
 pub struct MemDB<'memdb> {

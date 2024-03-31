@@ -1,4 +1,3 @@
-use crate::memstore::MemStoreValue;
 use super::occ::MemStoreItemEnum;
 pub enum RwType {
     READ,

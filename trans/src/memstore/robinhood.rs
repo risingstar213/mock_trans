@@ -177,10 +177,12 @@ where
         }
     }
 
+    #[allow(unused)]
     pub fn from_raw(size: usize, dib_max: usize) -> Self {
         Self::new(size, dib_max)
     }
 
+    #[allow(unused)]
     pub fn into_raw(&self) -> *mut u8 {
         std::ptr::null_mut()
     }
@@ -349,6 +351,7 @@ impl<V> RobinHood<usize, V>
 where
     V: Default + Clone + Send + Sync,
 {
+    #[allow(unused)]
     fn print_store(&self) {
         let capacity = self.inbuf_cap;
         for i in 0..capacity {
@@ -374,6 +377,7 @@ impl RandGen for usize {
     }
 }
 
+#[allow(unused)]
 fn stress_sequential(steps: usize) {
     #[derive(Debug, Eq, PartialEq)]
     enum Ops {
