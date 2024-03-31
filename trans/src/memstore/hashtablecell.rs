@@ -100,7 +100,7 @@ where
             let mut meta = VersionRwLock::from_raw(old);
 
             if meta.read_flag == 0 {
-                meta.read_flag = 1;
+                meta.write_flag = 1;
                 meta.version += 1;
 
                 match self.rwlock.compare_exchange(

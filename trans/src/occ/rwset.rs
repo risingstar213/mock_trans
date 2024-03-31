@@ -7,34 +7,30 @@ pub enum RwType {
     ERASE,
 }
 
-pub struct RwItem<E>
-where
-    E: MemStoreItemEnum
+pub struct RwItem<const ITEM_MAX_SIZE: usize>
 {
-    table_id: usize,
-    rwtype:   RwType,
-    key:      u64,
-    value:    E,
-    lock:     u64,
-    seq:      u64,
+    pub(crate) table_id: usize,
+    pub(crate) rwtype:   RwType,
+    pub(crate) key:      u64,
+    pub(crate) value:    MemStoreItemEnum<ITEM_MAX_SIZE>,
+    pub(crate) lock:     u64,
+    pub(crate) seq:      u64,
 }
 
-impl<E> RwItem<E>
-where
-    E: MemStoreItemEnum
+impl<const ITEM_MAX_SIZE: usize> RwItem<ITEM_MAX_SIZE>
 {
     pub fn new_zero(table_id: usize, rwtype: RwType, key: u64) -> Self {
         Self {
             table_id: table_id,
             rwtype:   rwtype,
             key:      key,
-            value:    E::default(),
+            value:    MemStoreItemEnum::default(),
             lock:     0,
             seq:      0,
         }
     }
     
-    pub fn new(table_id: usize, rwtype: RwType, key: u64, value: E, lock: u64, seq: u64) -> Self {
+    pub fn new(table_id: usize, rwtype: RwType, key: u64, value: MemStoreItemEnum<ITEM_MAX_SIZE>, lock: u64, seq: u64) -> Self {
         Self {
             table_id: table_id,
             rwtype:   rwtype,
@@ -45,20 +41,16 @@ where
         }
     }
 
-    pub fn get_value_inner<T: MemStoreValue>(&mut self) -> T {
-        self.value.get_inner::<T>()
-    }
+    // pub fn get_value_inner<T: MemStoreValue>(&mut self) -> T {
+    //     self.value.get_inner::<T>()
+    // }
 }
-pub struct RwSet<E> 
-where
-    E: MemStoreItemEnum
+pub struct RwSet<const ITEM_MAX_SIZE: usize> 
 {
-    items: Vec<RwItem<E>>,
+    items: Vec<RwItem<ITEM_MAX_SIZE>>,
 }
 
-impl<E> RwSet<E>
-where
-    E: MemStoreItemEnum
+impl<const ITEM_MAX_SIZE: usize> RwSet<ITEM_MAX_SIZE>
 {
     pub fn new() -> Self {
         Self {
@@ -66,8 +58,12 @@ where
         }
     }
 
-    pub fn push(&mut self, item: RwItem<E>) {
+    pub fn push(&mut self, item: RwItem<ITEM_MAX_SIZE>) {
         self.items.push(item);
+    }
+
+    pub fn bucket(&mut self, idx: usize) -> &mut RwItem<ITEM_MAX_SIZE> {
+        return &mut self.items[idx];
     }
 
     #[inline]

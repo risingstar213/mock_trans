@@ -10,3 +10,5 @@ pub mod memdb;
 
 pub use memstore::MemStoreValue;
 pub use memstore::MemNodeMeta;
+
+pub use hashtable::HashTableMemStore;

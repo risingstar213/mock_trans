@@ -10,6 +10,16 @@ pub struct TableSchema {
     meta_len: u32,
 }
 
+impl Default for TableSchema {
+    fn default() -> Self {
+        Self {
+            k_len: 0,
+            v_len: 0,
+            meta_len: 0
+        }
+    }
+}
+
 impl TableSchema {
     pub fn new(k_len: u32, v_len: u32, meta_len: u32) -> Self {
         Self {
@@ -51,6 +61,17 @@ impl<'memdb> MemDB<'memdb>
     }
 
     // local
+    pub fn local_get_meta(&self, table_id: usize, key: u64) -> Option<MemNodeMeta>
+    {
+        if table_id >= self.metas.len() {
+            println!("the table does not exists!");
+            return None;
+        }
+
+        self.tables[table_id].local_get_meta(key)
+    }
+
+
     pub fn local_get_readonly(&self, table_id: usize, key: u64, ptr: *mut u8, len: u32) -> Option<MemNodeMeta>
     {
         if table_id >= self.metas.len() {
@@ -71,14 +92,14 @@ impl<'memdb> MemDB<'memdb>
         self.tables[table_id].local_get_for_upd(key, ptr, len, lock_content)
     }
 
-    pub fn local_lock_for_ins(&self, table_id: usize, key: u64, lock_content: u64) -> Option<MemNodeMeta>
+    pub fn local_lock(&self, table_id: usize, key: u64, lock_content: u64) -> Option<MemNodeMeta>
     {
         if table_id >= self.metas.len() {
             println!("the table does not exists!");
             return None;
         }
 
-        self.tables[table_id].local_lock_for_ins(key, lock_content)
+        self.tables[table_id].local_lock(key, lock_content)
     }
 
     pub fn local_unlock(&self, table_id: usize, key: u64, lock_content: u64) -> Option<MemNodeMeta>
@@ -91,24 +112,14 @@ impl<'memdb> MemDB<'memdb>
         self.tables[table_id].local_unlock(key, lock_content)
     }
 
-    pub fn local_advance_seq(&self, table_id: usize, key: u64) -> Option<MemNodeMeta>
+    pub fn local_upd_val_seq(&self, table_id: usize, key: u64, ptr: *mut u8, len: u32) -> Option<MemNodeMeta>
     {
         if table_id >= self.metas.len() {
             println!("the table does not exists!");
             return None;
         }
 
-        self.tables[table_id].local_advance_seq(key)
-    }
-
-    pub fn local_upd_val(&self, table_id: usize, key: u64, ptr: *mut u8, len: u32) -> Option<MemNodeMeta>
-    {
-        if table_id >= self.metas.len() {
-            println!("the table does not exists!");
-            return None;
-        }
-
-        self.tables[table_id].local_upd_val(key, ptr, len)
+        self.tables[table_id].local_upd_val_seq(key, ptr, len)
     }
 
     pub fn local_erase(&self, table_id: usize, key: u64) -> Option<MemNodeMeta>

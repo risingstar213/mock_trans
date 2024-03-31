@@ -36,8 +36,24 @@ where
         self.table.wunlock();
     }
 
+    fn local_get_meta(&self, key: u64) -> Option<MemNodeMeta> {
+        let mut ret: Option<MemNodeMeta> = None;
+
+        self.table.rlock();
+
+        match self.table.get(key) {
+            Some(node) => {
+                ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
+            }
+            None => {}
+        }
+
+        self.table.runlock();
+        ret
+    }
+
     fn local_get_readonly(&self, key: u64, ptr: *mut u8, len: u32) -> Option<MemNodeMeta> {
-        if len as usize != std::mem::size_of::<T>() {
+        if std::mem::size_of::<T>() > len as usize {
             panic!("get length is not rational!");
         }
 
@@ -65,7 +81,7 @@ where
         len: u32,
         lock_content: u64,
     ) -> Option<MemNodeMeta> {
-        if len as usize != std::mem::size_of::<T>() {
+        if std::mem::size_of::<T>() > len as usize {
             panic!("get length is not rational!");
         }
 
@@ -87,13 +103,14 @@ where
         ret
     }
 
-    fn local_lock_for_ins(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta> {
+    fn local_lock(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta> {
         let ret: Option<MemNodeMeta>;
 
         self.table.wlock();
 
         match self.table.get(key) {
             Some(node) => {
+                node.try_lock(lock_content);
                 ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
             }
             None => {
@@ -123,27 +140,10 @@ where
         ret
     }
 
-    fn local_advance_seq(&self, key: u64) -> Option<MemNodeMeta> {
+    fn local_upd_val_seq(&self, key: u64, ptr: *const u8, len: u32) -> Option<MemNodeMeta> {
         let mut ret: Option<MemNodeMeta> = None;
 
-        self.table.rlock();
-        match self.table.get(key) {
-            Some(node) => {
-                node.advance_seq();
-                ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
-            }
-            None => {}
-        }
-
-        self.table.runlock();
-
-        ret
-    }
-
-    fn local_upd_val(&self, key: u64, ptr: *const u8, len: u32) -> Option<MemNodeMeta> {
-        let mut ret: Option<MemNodeMeta> = None;
-
-        if len as usize != std::mem::size_of::<T>() {
+        if std::mem::size_of::<T>() > len as usize {
             panic!("upd length is not rational!");
         }
         self.table.rlock();
@@ -153,6 +153,7 @@ where
         match self.table.get(key) {
             Some(node) => {
                 node.set_value(value);
+                node.advance_seq();
                 ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
             }
             None => {}

@@ -137,6 +137,7 @@ pub trait MemStore {
     fn lock_exclusive(&self);
     fn unlock_exclusive(&self);
 
+    fn local_get_meta(&self, key: u64) -> Option<MemNodeMeta>;
     fn local_get_readonly(&self, key: u64, ptr: *mut u8, len: u32) -> Option<MemNodeMeta>;
     fn local_get_for_upd(
         &self,
@@ -145,10 +146,9 @@ pub trait MemStore {
         len: u32,
         lock_content: u64,
     ) -> Option<MemNodeMeta>;
-    fn local_lock_for_ins(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta>;
+    fn local_lock(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta>;
     fn local_unlock(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta>;
-    fn local_advance_seq(&self, key: u64) -> Option<MemNodeMeta>;
     // update or insert
-    fn local_upd_val(&self, key: u64, ptr: *const u8, len: u32) -> Option<MemNodeMeta>;
+    fn local_upd_val_seq(&self, key: u64, ptr: *const u8, len: u32) -> Option<MemNodeMeta>;
     fn local_erase(&self, key: u64) -> Option<MemNodeMeta>;
 }
