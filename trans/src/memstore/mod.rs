@@ -1,8 +1,7 @@
-mod bplustree;
+mod bplustree_memstore;
 
-mod hashtable;
-mod hashtablecell;
 mod robinhood;
+mod robinhood_memstore;
 
 mod memstore;
 
@@ -11,4 +10,4 @@ pub mod memdb;
 pub use memstore::MemStoreValue;
 pub use memstore::MemNodeMeta;
 
-pub use hashtable::HashTableMemStore;
+pub use robinhood_memstore::RobinhoodMemStore;

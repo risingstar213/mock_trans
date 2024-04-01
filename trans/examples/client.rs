@@ -1,4 +1,3 @@
-use libc::sleep;
 use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -23,6 +22,7 @@ struct AddRpcProcess {
     // conn: Arc<RdmaRcConn<'a>>,
 }
 impl RdmaRecvCallback for AddRpcProcess {
+    #[allow(unused)]
     fn rdma_recv_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8) {
         let req = msg as *mut AddResponse;
         println!("get add response {:}", unsafe { (*req).sum });

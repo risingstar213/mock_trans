@@ -6,7 +6,6 @@ use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
 use trans::rdma::RdmaRecvCallback;
 
-use rdma_sys::*;
 
 #[repr(C)]
 pub struct AddRequest {

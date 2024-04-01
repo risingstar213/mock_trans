@@ -1,13 +1,10 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 
-use rdma_sys::ibv_wr_opcode::IBV_WR_SEND;
 use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
 use trans::rdma::two_sides::TwoSidesComm;
 use trans::rdma::RdmaRecvCallback;
-
-use rdma_sys::*;
 
 #[repr(C)]
 pub struct AddRequest {

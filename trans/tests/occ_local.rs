@@ -1,10 +1,9 @@
 #![feature(get_mut_unchecked)]
 
 use std::sync::Arc;
-use lazy_static::lazy_static;
 
 use trans::memstore::memdb::{MemDB, TableSchema};
-use trans::memstore::{MemStoreValue, HashTableMemStore};
+use trans::memstore::{MemStoreValue, RobinhoodMemStore};
 use trans::occ::occ_local::OccLocal;
 use trans::occ::Occ;
 use trans::occ::RwType;
@@ -101,7 +100,7 @@ fn test_conflicts(memdb: &Arc<MemDB>) {
 fn occlocal_test()
 {
     let mut memdb = Arc::new(MemDB::new());
-    let memstore = HashTableMemStore::<Account>::new();
+    let memstore = RobinhoodMemStore::<Account>::new();
     
     unsafe {
         Arc::get_mut_unchecked(&mut memdb).add_schema(0, TableSchema::default(), memstore);

@@ -1,25 +1,25 @@
-use super::hashtablecell::HashTableCell;
+use super::robinhood::robinhoodcell::RobinHoodTableCell;
 use super::memstore::{MemNode, MemNodeMeta, MemStore, MemStoreValue};
 
-pub struct HashTableMemStore<T>
+pub struct RobinhoodMemStore<T>
 where
     T: MemStoreValue,
 {
-    table: HashTableCell<T>,
+    table: RobinHoodTableCell<T>,
 }
 
-impl<T> HashTableMemStore<T> 
+impl<T> RobinhoodMemStore<T> 
 where 
     T: MemStoreValue 
 {
     pub fn new() -> Self {
         Self {
-            table: HashTableCell::<T>::new()
+            table: RobinHoodTableCell::<T>::new()
         }
     }
 }
 
-impl<T> MemStore for HashTableMemStore<T>
+impl<T> MemStore for RobinhoodMemStore<T>
 where
     T: MemStoreValue,
 {

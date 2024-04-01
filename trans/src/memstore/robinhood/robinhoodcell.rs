@@ -2,7 +2,7 @@ use byte_struct::*;
 use std::cell::{Cell, UnsafeCell};
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use super::memstore::{MemNode, MemStoreValue};
+use super::super::memstore::{MemNode, MemStoreValue};
 use super::robinhood::RobinHood;
 
 use crate::{ROBINHOOD_SIZE, ROBINHOOD_DIB_MAX};
@@ -18,7 +18,7 @@ bitfields!(
 /// | 31 ... 10 | 9 | 8 ... 0 |
 /// TODO: using htm to ensure consistence
 /// UnsafeCell is in need
-pub struct HashTableCell<T>
+pub struct RobinHoodTableCell<T>
 where
     T: MemStoreValue,
 {
@@ -26,10 +26,10 @@ where
     table: UnsafeCell<RobinHood<u64, MemNode<T>>>,
 }
 
-unsafe impl<T> Send for HashTableCell<T> where T: MemStoreValue {}
-unsafe impl<T> Sync for HashTableCell<T> where T: MemStoreValue {}
+unsafe impl<T> Send for RobinHoodTableCell<T> where T: MemStoreValue {}
+unsafe impl<T> Sync for RobinHoodTableCell<T> where T: MemStoreValue {}
 
-impl<T> HashTableCell<T>
+impl<T> RobinHoodTableCell<T>
 where
     T: MemStoreValue,
 {

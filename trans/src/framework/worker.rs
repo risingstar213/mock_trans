@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-
-use super::rpc::AsyncRpc;
 use super::scheduler::AsyncScheduler;
 
 pub trait AsyncWorker<'a>

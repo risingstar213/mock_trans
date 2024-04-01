@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::memstore::memdb;
 use crate::memstore::memdb::MemDB;
 use crate::memstore::MemStoreValue;
 use crate::memstore::MemNodeMeta;
@@ -121,6 +120,31 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccLocal<'trans, MAX_ITE
             self.memdb.local_unlock(item.table_id, item.key, item.lock);
         }
     }
+
+    fn recover_on_aborted(&mut self) {
+        if self.status != OccStatus::OccMustabort {
+            return;
+        }
+
+        for i in 0..self.updateset.get_len() {
+            let item = self.updateset.bucket(i);
+            self.memdb.local_unlock(item.table_id, item.key, item.lock);
+        }
+
+        for i in 0..self.writeset.get_len() {
+            let item = self.writeset.bucket(i);
+
+            match item.rwtype {
+                RwType::ERASE | RwType::UPDATE => {
+                    self.memdb.local_unlock(item.table_id, item.key, item.lock);
+                },
+                RwType::INSERT => {
+                    self.memdb.local_erase(item.table_id, item.key);
+                },
+                _ => {}
+            }
+        }
+    }
 }
 
 impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
@@ -233,7 +257,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
     }
 
     fn abort(&mut self) {
-        self.unlock();
+        self.recover_on_aborted();
 
         self.status = OccStatus::OccAborted;
     }

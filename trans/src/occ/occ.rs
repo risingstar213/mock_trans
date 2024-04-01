@@ -75,6 +75,8 @@ pub trait OccExecute {
     fn commit_write(&mut self);
 
     fn unlock(&mut self);
+
+    fn recover_on_aborted(&mut self);
 }
 
 pub trait Occ {
