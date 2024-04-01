@@ -6,7 +6,7 @@ use crate::memstore::MemStoreValue;
 use super::occ::{OccStatus, OccExecute, Occ};
 use super::rwset::{RwSet, RwType};
 
-pub struct OccRdma<'trans, const MAX_ITEM_SIZE: usize>
+pub struct OccRemote<'trans, const MAX_ITEM_SIZE: usize>
 {
     status:    OccStatus,
     memdb:     Arc<MemDB<'trans>>,
@@ -15,7 +15,7 @@ pub struct OccRdma<'trans, const MAX_ITEM_SIZE: usize>
     writeset:  RwSet<MAX_ITEM_SIZE>
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> OccRdma<'trans, MAX_ITEM_SIZE>
+impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
 {
     pub fn new(memdb: &Arc<MemDB<'trans>>) -> Self {
         Self {
@@ -29,7 +29,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRdma<'trans, MAX_ITEM_SIZE>
 
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccRdma<'trans, MAX_ITEM_SIZE>
+impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccRemote<'trans, MAX_ITEM_SIZE>
 {
     fn lock_writes(&mut self) {
         
@@ -56,7 +56,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccRdma<'trans, MAX_ITEM
     }
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccRdma<'trans, MAX_ITEM_SIZE>
+impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccRemote<'trans, MAX_ITEM_SIZE>
 {
     fn start(&mut self) {
         unimplemented!()

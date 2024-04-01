@@ -19,7 +19,7 @@ pub struct AddResponse {
 }
 
 struct AddRpcProcess {
-    // conn: Arc<RdmaRcConn<'a>>,
+    // conn: Arc<RdmaRcConn<'conn>>,
 }
 impl RdmaRecvCallback for AddRpcProcess {
     #[allow(unused)]

@@ -23,13 +23,13 @@ pub struct AddResponse {
 
 const ADD_ID: u32 = 0;
 
-struct AskServerWorker<'a> {
-    scheduler: Arc<AsyncScheduler<'a>>,
+struct AskServerWorker<'worker> {
+    scheduler: Arc<AsyncScheduler<'worker>>,
     stopped: Mutex<bool>,
 }
 
-impl<'a> AskServerWorker<'a> {
-    fn new(scheduler: &Arc<AsyncScheduler<'a>>) -> Self {
+impl<'worker> AskServerWorker<'worker> {
+    fn new(scheduler: &Arc<AsyncScheduler<'worker>>) -> Self {
         Self {
             scheduler: scheduler.clone(),
             stopped: Mutex::new(false),
@@ -37,7 +37,7 @@ impl<'a> AskServerWorker<'a> {
     }
 }
 
-impl<'a> AskServerWorker<'a> {
+impl<'worker> AskServerWorker<'worker> {
     async fn work_routine(&self, cid: u32) {
         let reply_buf = self.scheduler.get_reply_buf() as usize;
         self.scheduler.prepare_multi_replys(cid, reply_buf as _, 10);
@@ -79,8 +79,8 @@ impl<'a> AskServerWorker<'a> {
     }
 }
 
-impl<'a> AsyncWorker<'a> for AskServerWorker<'a> {
-    fn get_scheduler(&self) -> &AsyncScheduler<'a> {
+impl<'worker> AsyncWorker<'worker> for AskServerWorker<'worker> {
+    fn get_scheduler(&self) -> &AsyncScheduler<'worker> {
         return &self.scheduler;
     }
 
@@ -89,7 +89,7 @@ impl<'a> AsyncWorker<'a> for AskServerWorker<'a> {
     }
 }
 
-impl<'a> RpcHandler for AskServerWorker<'a> {
+impl<'worker> RpcHandler for AskServerWorker<'worker> {
     #[allow(unused)]
     fn rpc_handler(
         &self,

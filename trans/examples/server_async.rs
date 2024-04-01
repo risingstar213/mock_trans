@@ -24,13 +24,13 @@ pub struct AddResponse {
 
 const ADD_ID: u32 = 0;
 
-struct AnswerClientWorker<'a> {
-    scheduler: Arc<AsyncScheduler<'a>>,
+struct AnswerClientWorker<'worker> {
+    scheduler: Arc<AsyncScheduler<'worker>>,
     number: Mutex<u64>,
 }
 
-impl<'a> AnswerClientWorker<'a> {
-    fn new(scheduler: &Arc<AsyncScheduler<'a>>) -> Self {
+impl<'worker> AnswerClientWorker<'worker> {
+    fn new(scheduler: &Arc<AsyncScheduler<'worker>>) -> Self {
         Self {
             scheduler: scheduler.clone(),
             number: Mutex::new(0),
@@ -39,7 +39,7 @@ impl<'a> AnswerClientWorker<'a> {
 }
 
 // RPC handlers
-impl<'a> AnswerClientWorker<'a> {
+impl<'worker> AnswerClientWorker<'worker> {
     fn add_handler(
         &self,
         src_conn: &mut RdmaRcConn,
@@ -72,7 +72,7 @@ impl<'a> AnswerClientWorker<'a> {
     }
 }
 
-impl<'a> RpcHandler for AnswerClientWorker<'a> {
+impl<'worker> RpcHandler for AnswerClientWorker<'worker> {
     fn rpc_handler(
         &self,
         src_conn: &mut RdmaRcConn,
@@ -92,8 +92,8 @@ impl<'a> RpcHandler for AnswerClientWorker<'a> {
     }
 }
 
-impl<'a> AsyncWorker<'a> for AnswerClientWorker<'a> {
-    fn get_scheduler(&self) -> &AsyncScheduler<'a> {
+impl<'worker> AsyncWorker<'worker> for AnswerClientWorker<'worker> {
+    fn get_scheduler(&self) -> &AsyncScheduler<'worker> {
         return &self.scheduler;
     }
 
@@ -102,8 +102,8 @@ impl<'a> AsyncWorker<'a> for AnswerClientWorker<'a> {
     }
 }
 
-// struct AddRpc<'a> {
-//     worker: Arc<AsyncWorker<'a>>,
+// struct AddRpc<'worker> {
+//     worker: Arc<AsyncWorker<'worker>>,
 // }
 
 #[tokio::main]

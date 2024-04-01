@@ -18,10 +18,10 @@ pub struct AddResponse {
     sum: u8,
 }
 
-struct AddRpcProcess<'a> {
-    conn: Arc<Mutex<RdmaRcConn<'a>>>,
+struct AddRpcProcess<'conn> {
+    conn: Arc<Mutex<RdmaRcConn<'conn>>>,
 }
-impl<'a> RdmaRecvCallback for AddRpcProcess<'a> {
+impl<'conn> RdmaRecvCallback for AddRpcProcess<'conn> {
     fn rdma_recv_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8) {
         let req = msg as *mut AddRequest;
         let a = unsafe { (*req).a };
@@ -40,14 +40,14 @@ impl<'a> RdmaRecvCallback for AddRpcProcess<'a> {
     }
 }
 
-impl<'a> AddRpcProcess<'a> {
-    fn new(conn: &Arc<Mutex<RdmaRcConn<'a>>>) -> Self {
+impl<'conn> AddRpcProcess<'conn> {
+    fn new(conn: &Arc<Mutex<RdmaRcConn<'conn>>>) -> Self {
         Self { conn: conn.clone() }
     }
 }
 
-unsafe impl<'a> Send for AddRpcProcess<'a> {}
-unsafe impl<'a> Sync for AddRpcProcess<'a> {}
+unsafe impl<'conn> Send for AddRpcProcess<'conn> {}
+unsafe impl<'conn> Sync for AddRpcProcess<'conn> {}
 
 fn main() {
     let mut rdma = RdmaControl::new(1);

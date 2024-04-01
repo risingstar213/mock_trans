@@ -51,20 +51,20 @@ impl Default for RdmaElement {
 
 // TODO: Recv elements can be shared between connections ?
 // How to treat buffers to store reqs? They cannot be shared
-pub struct RdmaRcConn<'a> {
+pub struct RdmaRcConn<'conn> {
     meta: RdmaRcMeta,
     allocator: Arc<LockedHeap>,
     elements: RdmaElement,
     rwcs: [ibv_wc; MAX_RECV_SIZE],
-    rhandler: Weak<dyn RdmaRecvCallback + Send + Sync + 'a>,
-    whandler: Weak<dyn RdmaSendCallback + Send + Sync + 'a>,
+    rhandler: Weak<dyn RdmaRecvCallback + Send + Sync + 'conn>,
+    whandler: Weak<dyn RdmaSendCallback + Send + Sync + 'conn>,
 }
 
-unsafe impl<'a> Send for RdmaRcConn<'a> {}
-// unsafe impl<'a> Sync for RdmaRcConn<'a> {}
+unsafe impl<'conn> Send for RdmaRcConn<'conn> {}
+// unsafe impl<'conn> Sync for RdmaRcConn<'conn> {}
 
 // RC Connection
-impl<'a> RdmaRcConn<'a> {
+impl<'conn> RdmaRcConn<'conn> {
     pub fn new(
         id: *mut rdma_cm_id,
         lm: *mut u8,
@@ -137,7 +137,7 @@ impl<'a> RdmaRcConn<'a> {
 
     pub fn register_recv_callback(
         &mut self,
-        handler: &Arc<impl RdmaRecvCallback + Send + Sync + 'a>,
+        handler: &Arc<impl RdmaRecvCallback + Send + Sync + 'conn>,
     ) -> TransResult<()> {
         self.rhandler = Arc::downgrade(handler) as _;
         Ok(())
@@ -411,7 +411,7 @@ impl<'a> RdmaRcConn<'a> {
     }
 }
 
-impl<'a> OneSideComm for RdmaRcConn<'a> {
+impl<'conn> OneSideComm for RdmaRcConn<'conn> {
     // for read / write primitives
     // read / write has no response, so the batch sending must be controlled by apps
     // the last must be send signaled
@@ -431,7 +431,7 @@ impl<'a> OneSideComm for RdmaRcConn<'a> {
     }
 }
 
-impl<'a> TwoSidesComm for RdmaRcConn<'a> {
+impl<'conn> TwoSidesComm for RdmaRcConn<'conn> {
     // for send primitives
     #[inline]
     fn flush_pending(&mut self) -> TransResult<()> {
@@ -457,7 +457,7 @@ impl<'a> TwoSidesComm for RdmaRcConn<'a> {
     }
 }
 
-impl<'a> Drop for RdmaRcConn<'a> {
+impl<'conn> Drop for RdmaRcConn<'conn> {
     fn drop(&mut self) {
         unsafe {
             rdma_dereg_mr(self.meta.lmr);

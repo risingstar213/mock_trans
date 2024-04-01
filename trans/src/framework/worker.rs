@@ -2,11 +2,11 @@ use std::sync::Arc;
 
 use super::scheduler::AsyncScheduler;
 
-pub trait AsyncWorker<'a>
+pub trait AsyncWorker<'worker>
 where
     Self: Send + Sync,
 {
-    fn get_scheduler(&self) -> &AsyncScheduler<'a>;
+    fn get_scheduler(&self) -> &AsyncScheduler<'worker>;
 
     fn has_stopped(&self) -> bool;
 

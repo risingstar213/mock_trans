@@ -20,15 +20,15 @@ struct RemoteMeta {
     rid: u32,
 }
 
-pub struct RdmaControl<'a> {
+pub struct RdmaControl<'control> {
     self_id: u64,
     listen_fd: *mut rdma_cm_id,
-    connections: HashMap<u64, Arc<Mutex<RdmaRcConn<'a>>>>,
+    connections: HashMap<u64, Arc<Mutex<RdmaRcConn<'control>>>>,
     lm: *mut u8,
     allocator: Arc<LockedHeap>,
 }
 
-impl<'a> RdmaControl<'a> {
+impl<'control> RdmaControl<'control> {
     pub fn new(self_id: u64) -> Self {
         let mr_length = 4096 * NPAGES as usize;
         let lm = unsafe { memalign(4096, mr_length) };
@@ -224,7 +224,7 @@ impl<'a> RdmaControl<'a> {
         Ok(())
     }
 
-    pub fn get_connection(&self, peer_id: u64) -> Arc<Mutex<RdmaRcConn<'a>>> {
+    pub fn get_connection(&self, peer_id: u64) -> Arc<Mutex<RdmaRcConn<'control>>> {
         self.connections.get(&peer_id).unwrap().clone()
     }
 
@@ -357,7 +357,7 @@ impl<'a> RdmaControl<'a> {
     }
 }
 
-impl<'a> Drop for RdmaControl<'a> {
+impl<'control> Drop for RdmaControl<'control> {
     fn drop(&mut self) {
         unsafe {
             free(self.lm as *mut _);

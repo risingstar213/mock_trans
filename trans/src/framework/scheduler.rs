@@ -44,9 +44,9 @@ impl ReplyMeta {
     }
 }
 
-pub struct AsyncScheduler<'a> {
+pub struct AsyncScheduler<'sched> {
     allocator: Mutex<RpcBufAllocator>,
-    conns: RwLock<HashMap<u64, Arc<Mutex<RdmaRcConn<'a>>>>>,
+    conns: RwLock<HashMap<u64, Arc<Mutex<RdmaRcConn<'sched>>>>>,
     //  read / write (one-side primitives)
     // pending for coroutines
     pendings: Mutex<Vec<u32>>,
@@ -55,14 +55,14 @@ pub struct AsyncScheduler<'a> {
     reply_metas: Mutex<ReplyMeta>,
 
     // callbacks
-    callback: RwLock<Weak<dyn RpcHandler + Send + Sync + 'a>>,
+    callback: RwLock<Weak<dyn RpcHandler + Send + Sync + 'sched>>,
 }
 
 // 手动标记 Send + Sync
-unsafe impl<'a> Send for AsyncScheduler<'a> {}
-unsafe impl<'a> Sync for AsyncScheduler<'a> {}
+unsafe impl<'sched> Send for AsyncScheduler<'sched> {}
+unsafe impl<'sched> Sync for AsyncScheduler<'sched> {}
 
-impl<'a> AsyncScheduler<'a> {
+impl<'sched> AsyncScheduler<'sched> {
     pub fn new(routine_num: u32, allocator: &Arc<LockedHeap>) -> Self {
         let mut pendings = Vec::new();
         for _ in 0..routine_num {
@@ -79,11 +79,11 @@ impl<'a> AsyncScheduler<'a> {
         }
     }
 
-    pub fn append_conn(&self, id: u64, conn: &Arc<Mutex<RdmaRcConn<'a>>>) {
+    pub fn append_conn(&self, id: u64, conn: &Arc<Mutex<RdmaRcConn<'sched>>>) {
         self.conns.write().unwrap().insert(id, conn.clone());
     }
 
-    pub fn register_callback(&self, callback: &Arc<impl RpcHandler + Send + Sync + 'a>) {
+    pub fn register_callback(&self, callback: &Arc<impl RpcHandler + Send + Sync + 'sched>) {
         *self.callback.write().unwrap() = Arc::downgrade(callback) as _;
     }
 
@@ -95,7 +95,7 @@ impl<'a> AsyncScheduler<'a> {
     }
 }
 
-impl<'a> RdmaSendCallback for AsyncScheduler<'a> {
+impl<'sched> RdmaSendCallback for AsyncScheduler<'sched> {
     #[allow(unused)]
     fn rdma_send_handler(&self, wr_id: u64) {
         todo!();
@@ -104,7 +104,7 @@ impl<'a> RdmaSendCallback for AsyncScheduler<'a> {
 }
 
 // RPCs
-impl<'a> AsyncScheduler<'a> {
+impl<'sched> AsyncScheduler<'sched> {
     pub fn poll_recvs(&self) {
         // let mut pendings = self.pendings.lock().unwrap();
         let guard = self.conns.read().unwrap();
@@ -153,7 +153,7 @@ impl<'a> AsyncScheduler<'a> {
     }
 }
 
-impl<'a> RdmaRecvCallback for AsyncScheduler<'a> {
+impl<'sched> RdmaRecvCallback for AsyncScheduler<'sched> {
     fn rdma_recv_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8) {
         // todo!();
         let meta = RpcHeaderMeta::from_header(unsafe { *(msg as *mut u32) });
@@ -197,7 +197,7 @@ impl<'a> RdmaRecvCallback for AsyncScheduler<'a> {
     }
 }
 
-impl<'a> AsyncRpc for AsyncScheduler<'a> {
+impl<'sched> AsyncRpc for AsyncScheduler<'sched> {
     fn get_reply_buf(&self) -> *mut u8 {
         // std::ptr::null_mut()
         // let layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::align_of::<usize>()).unwrap();
@@ -275,7 +275,7 @@ impl<'a> AsyncRpc for AsyncScheduler<'a> {
 }
 
 // Async waiter
-impl<'a> AsyncScheduler<'a> {
+impl<'sched> AsyncScheduler<'sched> {
     pub async fn yield_now(&self, cid: u32) {
         // println!("yield: {}", _cid);
         tokio::task::yield_now().await;

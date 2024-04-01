@@ -19,7 +19,7 @@ pub struct AddResponse {
 }
 
 struct AddRpcProcess {
-    // conn: Arc<RdmaRcConn<'a>>,
+    // conn: Arc<RdmaRcConn<'conn>>,
 }
 impl RdmaRecvCallback for AddRpcProcess {
     fn rdma_recv_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8) {
