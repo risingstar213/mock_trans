@@ -20,7 +20,7 @@ const SERVERS: [&str; 2] = ["10.10.10.6\0", "10.10.10.9\0"];
 const PORTS: [&str; 2] = ["7471\0", "7472\0"];
 
 // mem info
-const NPAGES: u64 = 8;
+const NPAGES: u64 = 64;
 const MAX_PACKET_SIZE: usize = 128;
 
 // send recv info
@@ -35,8 +35,8 @@ const WRID_RESERVE_BITS: usize = 8;
 // RPCs
 const MAX_INFLIGHT_REPLY: usize = 32;
 const MAX_INFLIGHT_REQS: usize = 32;
-const MAX_REQ_SIZE: usize = 32;
-const MAX_RESP_SIZE: usize = 128;
+const MAX_REQ_SIZE: usize = 128;
+const MAX_RESP_SIZE: usize = 1024;
 
 /////////////////// MemStore //////////////////////////
 const ROBINHOOD_SIZE:    usize = 2048;

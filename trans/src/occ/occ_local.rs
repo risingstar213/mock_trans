@@ -153,15 +153,18 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
         self.status = OccStatus::OccInprogress;
     }
     
-    fn read<T: MemStoreValue>(&mut self, table_id: usize, key: u64) -> usize {
+    fn read<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
         // local
+        assert_eq!(part_id, 0);
+
         let mut value = T::default();
         let ptr = &mut value as *mut T as *mut u8;
         let len = std::mem::size_of::<T>();
         let meta = self.memdb.local_get_readonly(table_id, key, ptr, len as _).unwrap();
 
         let item = RwItem::new(
-            table_id, 
+            table_id,
+            0,
             RwType::READ, 
             key, 
             MemStoreItemEnum::from_raw(value),
@@ -177,8 +180,10 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
         return self.readset.get_len() - 1;
     }
 
-    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, key: u64, lock_content: u64) -> usize {
+    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, lock_content: u64) -> usize {
         // local
+        assert_eq!(part_id, 0);
+
         let mut value = T::default();
         let ptr = &mut value as *mut T as *mut u8;
         let len = std::mem::size_of::<T>();
@@ -186,6 +191,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
 
         let item = RwItem::new(
             table_id,
+            0,
             RwType::UPDATE,
             key,
             MemStoreItemEnum::from_raw(value),
@@ -201,14 +207,17 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
         return self.updateset.get_len() - 1;
     }
 
-    fn write<T: MemStoreValue>(&mut self, table_id: usize, key: u64, lock_content: u64, rwtype: RwType) -> usize {
+    fn write<T: MemStoreValue>(&mut self, table_id: usize,  part_id: u64, key: u64, lock_content: u64, rwtype: RwType) -> usize {
         // local
+        assert_eq!(part_id, 0);
+
         let value = T::default();
         let meta = MemNodeMeta::new(lock_content, 0);
 
         // lock later
         let item = RwItem::new(
             table_id,
+            0,
             rwtype,
             key,
             MemStoreItemEnum::from_raw(value),

@@ -82,12 +82,12 @@ pub trait OccExecute {
 pub trait Occ {
     fn start(&mut self);
 
-    fn read<T: MemStoreValue>(&mut self, table_id: usize, key: u64) -> usize;
+    fn read<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize;
 
     // fetch for write
-    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, key: u64, lock_content: u64) -> usize;
+    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, lock_content: u64) -> usize;
 
-    fn write<T: MemStoreValue>(&mut self, table_id: usize, key: u64, lock_content: u64, rwtype: RwType) -> usize;
+    fn write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, lock_content: u64, rwtype: RwType) -> usize;
 
     fn get_value<T: MemStoreValue>(&mut self, update: bool, idx: usize) -> &T;
 
