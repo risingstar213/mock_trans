@@ -13,7 +13,7 @@ pub struct RwItem<const ITEM_MAX_SIZE: usize>
     pub(crate) rwtype:   RwType,
     pub(crate) key:      u64,
     pub(crate) value:    MemStoreItemEnum<ITEM_MAX_SIZE>,
-    pub(crate) lock:     u64,
+    // pub(crate) lock:     u64,
     pub(crate) seq:      u64,
 }
 
@@ -26,19 +26,17 @@ impl<const ITEM_MAX_SIZE: usize> RwItem<ITEM_MAX_SIZE>
             rwtype:   rwtype,
             key:      key,
             value:    MemStoreItemEnum::default(),
-            lock:     0,
             seq:      0,
         }
     }
     
-    pub fn new(table_id: usize, part_id: u64, rwtype: RwType, key: u64, value: MemStoreItemEnum<ITEM_MAX_SIZE>, lock: u64, seq: u64) -> Self {
+    pub fn new(table_id: usize, part_id: u64, rwtype: RwType, key: u64, value: MemStoreItemEnum<ITEM_MAX_SIZE>, seq: u64) -> Self {
         Self {
             table_id: table_id,
             part_id:  part_id,
             rwtype:   rwtype,
             key:      key,
             value:    value,
-            lock:     lock,
             seq:      seq
         }
     }

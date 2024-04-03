@@ -5,7 +5,7 @@ use crate::memstore::memdb::MemDB;
 use crate::memstore::MemStoreValue;
 use crate::framework::scheduler::AsyncScheduler;
 
-use super::occ::{OccStatus, OccExecute, Occ, MemStoreItemEnum};
+use super::occ::{LockContent, MemStoreItemEnum, Occ, OccExecute, OccStatus};
 use super::rwset::{RwSet, RwItem, RwType};
 use super::remote_helpers::batch_rpc_ctrl::BatchRpcCtrl;
 use super::remote_helpers::batch_rpc_proc::*;
@@ -52,26 +52,24 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
             RwType::READ, 
             key, 
             MemStoreItemEnum::from_raw(value),
-            meta.lock, 
             meta.seq
         );
 
-        if meta.lock != 0 {
-            self.status = OccStatus::OccMustabort;
-        }
 
         self.readset.push(item);
         return read_idx;
     }
 
     #[inline]
-    fn local_fetch_write<T: MemStoreValue>(&mut self, table_id: usize, key: u64, lock_content: u64) -> usize {
+    fn local_fetch_write<T: MemStoreValue>(&mut self, table_id: usize, key: u64) -> usize {
         let update_idx = self.updateset.get_len();
+
+        let lock_content = LockContent::new(self.part_id, self.cid);
 
         let mut value = T::default();
         let ptr = &mut value as *mut T as *mut u8;
         let len = std::mem::size_of::<T>();
-        let meta = self.memdb.local_get_for_upd(table_id, key, ptr, len as _, lock_content).unwrap();
+        let meta = self.memdb.local_get_for_upd(table_id, key, ptr, len as _, lock_content.to_content()).unwrap();
 
         let item = RwItem::new(
             table_id,
@@ -79,11 +77,10 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
             RwType::UPDATE,
             key,
             MemStoreItemEnum::from_raw(value),
-            lock_content,
             meta.seq
         );
 
-        if meta.lock != lock_content {
+        if meta.lock != lock_content.to_content() {
             self.status = OccStatus::OccMustabort;
         }
 
@@ -93,12 +90,13 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
     }
 
     #[inline]
-    fn local_lock_write(&mut self, idx: usize) {
+    fn local_lock_write(&mut self, idx: usize, lock_content: u64) {
+
         let item = self.writeset.bucket(idx);
 
-        let meta = self.memdb.local_lock(item.table_id, item.key, item.lock).unwrap();
+        let meta = self.memdb.local_lock(item.table_id, item.key, lock_content).unwrap();
 
-        if meta.lock != item.lock {
+        if meta.lock != lock_content {
             self.status = OccStatus::OccMustabort;
         }
     }
@@ -130,7 +128,6 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
             RwType::READ, 
             key, 
             MemStoreItemEnum::default(),
-            0, 
             0
         );
         self.readset.push(item);
@@ -139,13 +136,12 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
     }
     // fetch write
     #[inline]
-    fn remote_fetch_write_rpc<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, lock_content: u64) -> usize {
+    fn remote_fetch_write_rpc<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
         let update_idx = self.updateset.get_len();
         let remote_req = FetchWriteReqItem{
             table_id:   table_id,
             key:        key,
             update_idx: update_idx,
-            lock_sig:   lock_content,
         };
         self.batch_rpc.append_req::<FetchWriteReqItem>(
             &remote_req, 
@@ -161,7 +157,6 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
             RwType::UPDATE,
             key,
             MemStoreItemEnum::default(),
-            lock_content,
             0
         );
         self.updateset.push(item);
@@ -176,7 +171,6 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
         let remote_req = WriteReqItem{
             table_id: item.table_id,
             key:      item.key,
-            lock_sig: item.lock,
         };
 
         self.batch_rpc.append_req::<WriteReqItem>(
@@ -192,10 +186,11 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
 impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccRemote<'trans, MAX_ITEM_SIZE>
 {
     fn lock_writes(&mut self) {
+        let lock_content = LockContent::new(self.part_id, self.cid);
         for i in 0..self.writeset.get_len() {
             let item = self.writeset.bucket(i);
             if item.part_id == self.part_id {
-                self.local_lock_write(i);
+                self.local_lock_write(i, lock_content.to_content());
             } else {
                 self.remote_lock_writes_rpc(i);
             }
@@ -240,17 +235,17 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccRemote<'trans, MAX_ITEM_SIZE
     }
 
     // fetch for write
-    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, lock_content: u64) -> usize {
+    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
         if part_id == self.part_id {
             // local
-            self.local_fetch_write::<T>(table_id, key, lock_content)
+            self.local_fetch_write::<T>(table_id, key)
         } else {
             // remote
-            self.remote_fetch_write_rpc::<T>(table_id, part_id, key, lock_content)
+            self.remote_fetch_write_rpc::<T>(table_id, part_id, key)
         }
     }
 
-    fn write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, lock_content: u64, rwtype: RwType) -> usize {
+    fn write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, rwtype: RwType) -> usize {
         let write_idx = self.writeset.get_len();
 
         // lock later
@@ -260,7 +255,6 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccRemote<'trans, MAX_ITEM_SIZE
             rwtype,
             key,
             MemStoreItemEnum::default(),
-            lock_content,
             0
         );
 

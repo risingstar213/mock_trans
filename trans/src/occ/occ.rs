@@ -1,23 +1,43 @@
+use byte_struct::*;
+
 use crate::memstore::MemStoreValue;
 
 use super::rwset::{RwSet, RwType};
 
-// pub trait MemStoreItemEnum: Default {
-//     fn from_raw<T: MemStoreValue>(value: T) -> Self;
-//     fn get_inner<T: MemStoreValue>(&self) -> &T;
-//     fn set_inner<T: MemStoreValue>(&mut self, value: &T);
-//     fn get_raw_ptr(&mut self) -> *mut u8;
-//     fn get_len(&mut self) -> u32;
-// }
+bitfields!(
+    pub LockContent: u64 {
+        pub peer_id: 54,
+        pub cid:     10,
+    }
+);
+
+impl LockContent {
+    pub fn new(peer_id: u64, cid: u32) -> Self {
+        Self {
+            peer_id: peer_id,
+            cid:     cid as _,
+        }
+    }
+
+    pub fn to_content(&self) -> u64 {
+        self.to_raw()
+    }
+
+    pub fn from_content(content: u64) -> Self {
+        Self::from_raw(content)
+    }
+}
 
 // How to fix this type of dynamic dispatch elegently?
 pub struct MemStoreItemEnum<const ITEM_MAX_SIZE: usize> {
+    length: u32,
     inner: [u8; ITEM_MAX_SIZE],
 }
 
 impl<const SIZE: usize> Default for MemStoreItemEnum<SIZE> {
     fn default() -> Self {
         Self {
+            length: 0,
             inner: unsafe { std::mem::zeroed() }
         }
     }
@@ -29,6 +49,8 @@ impl<const ITEM_MAX_SIZE: usize> MemStoreItemEnum<ITEM_MAX_SIZE> {
             panic!("not rational!");
         }
         let mut item = Self::default();
+        item.length = std::mem::size_of::<T>() as u32;
+
         let ref_mut = unsafe { (&mut item.inner as *mut u8 as *mut T).as_mut().unwrap() };
         *ref_mut = value;
         item
@@ -46,6 +68,7 @@ impl<const ITEM_MAX_SIZE: usize> MemStoreItemEnum<ITEM_MAX_SIZE> {
         if ITEM_MAX_SIZE < std::mem::size_of::<T>() {
             panic!("not rational!");
         }
+        self.length = std::mem::size_of::<T>() as u32;
 
         let ref_mut = unsafe { (&mut self.inner as *mut u8 as *mut T).as_mut().unwrap() };
         *ref_mut = value.clone();
@@ -53,6 +76,10 @@ impl<const ITEM_MAX_SIZE: usize> MemStoreItemEnum<ITEM_MAX_SIZE> {
 
     pub fn get_raw_ptr(&mut self) -> *mut u8 {
         return &mut self.inner as *mut u8;
+    }
+
+    pub fn get_length(&self) -> u32 {
+        return self.length;
     }
 }
 
@@ -85,9 +112,9 @@ pub trait Occ {
     fn read<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize;
 
     // fetch for write
-    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, lock_content: u64) -> usize;
+    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize;
 
-    fn write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, lock_content: u64, rwtype: RwType) -> usize;
+    fn write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, rwtype: RwType) -> usize;
 
     fn get_value<T: MemStoreValue>(&mut self, update: bool, idx: usize) -> &T;
 

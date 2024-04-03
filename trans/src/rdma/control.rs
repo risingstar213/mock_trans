@@ -205,6 +205,7 @@ impl<'control> RdmaControl<'control> {
         );
 
         let connection = RdmaRcConn::new(
+            peer_id,
             id,
             lm as *mut u8,
             lmr,
@@ -329,6 +330,7 @@ impl<'control> RdmaControl<'control> {
         );
 
         let connection = RdmaRcConn::new(
+            recv_data.peer_id,
             id,
             lm as *mut u8,
             lmr,

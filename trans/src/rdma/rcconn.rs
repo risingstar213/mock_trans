@@ -50,8 +50,10 @@ impl Default for RdmaElement {
 }
 
 // TODO: Recv elements can be shared between connections ?
-// How to treat buffers to store reqs? They cannot be shared
+// How to treat buffers to store reqs? They cannot be shared.
+// Using SRQs to solve this problem
 pub struct RdmaRcConn<'conn> {
+    conn_id: u64,
     meta: RdmaRcMeta,
     allocator: Arc<LockedHeap>,
     elements: RdmaElement,
@@ -66,6 +68,7 @@ unsafe impl<'conn> Send for RdmaRcConn<'conn> {}
 // RC Connection
 impl<'conn> RdmaRcConn<'conn> {
     pub fn new(
+        conn_id: u64,
         id: *mut rdma_cm_id,
         lm: *mut u8,
         lmr: *mut ibv_mr,
@@ -84,6 +87,7 @@ impl<'conn> RdmaRcConn<'conn> {
         // let allocator = unsafe { LockedHeap::new(lm, (NPAGES * 4096) as usize) };
 
         Self {
+            conn_id: conn_id,
             meta: meta,
             allocator: allocator.clone(),
             elements: RdmaElement::default(),
@@ -91,6 +95,10 @@ impl<'conn> RdmaRcConn<'conn> {
             rhandler: Arc::downgrade(&DEFAULT_RDMA_RECV_HANDLER) as _,
             whandler: Arc::downgrade(&DEFAULT_RDMA_SEND_HANDLER) as _,
         }
+    }
+
+    pub fn get_conn_id(&self) -> u64 {
+        return self.conn_id;
     }
 
     pub fn init_and_start_recvs(&mut self) -> TransResult<()> {

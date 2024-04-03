@@ -161,7 +161,7 @@ impl<'sched> RdmaRecvCallback for AsyncScheduler<'sched> {
         match meta.rpc_type {
             rpc_msg_type::REQ => {
                 let callback = &self.callback;
-                let process_meta = RpcProcessMeta::new(meta.rpc_cid, 0, 0);
+                let process_meta = RpcProcessMeta::new(meta.rpc_cid, src_conn.get_conn_id(), 0);
                 callback.read().unwrap().upgrade().unwrap().rpc_handler(
                     src_conn,
                     meta.rpc_id,

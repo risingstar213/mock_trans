@@ -1,10 +1,8 @@
 use std::sync::Arc;
 use std::sync::Mutex;
-use tokio;
 
 use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
-use trans::rdma::two_sides::TwoSidesComm;
 
 use trans::framework::rpc::AsyncRpc;
 use trans::framework::rpc::{RpcHandler, RpcProcessMeta};

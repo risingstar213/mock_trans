@@ -23,6 +23,11 @@ impl<T> MemStore for RobinhoodMemStore<T>
 where
     T: MemStoreValue,
 {
+    #[inline]
+    fn get_item_length(&self) -> usize {
+        std::mem::size_of::<T>()
+    }
+    
     fn lock_shared(&self) {
         self.table.rlock();
     }
@@ -37,7 +42,7 @@ where
     }
 
     fn local_get_meta(&self, key: u64) -> Option<MemNodeMeta> {
-        let mut ret: Option<MemNodeMeta> = None;
+        let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
         self.table.rlock();
 
@@ -58,7 +63,7 @@ where
         }
 
         let value = unsafe { (ptr as *mut T).as_mut().unwrap() };
-        let mut ret: Option<MemNodeMeta> = None;
+        let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
         self.table.rlock();
 
@@ -86,7 +91,7 @@ where
         }
 
         let value = unsafe { (ptr as *mut T).as_mut().unwrap() };
-        let mut ret: Option<MemNodeMeta> = None;
+        let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
         self.table.rlock();
 
@@ -125,7 +130,7 @@ where
     }
 
     fn local_unlock(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta> {
-        let mut ret: Option<MemNodeMeta> = None;
+        let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
         self.table.rlock();
         match self.table.get(key) {
@@ -141,7 +146,7 @@ where
     }
 
     fn local_upd_val_seq(&self, key: u64, ptr: *const u8, len: u32) -> Option<MemNodeMeta> {
-        let mut ret: Option<MemNodeMeta> = None;
+        let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
         if std::mem::size_of::<T>() > len as usize {
             panic!("upd length is not rational!");
@@ -164,7 +169,7 @@ where
     }
 
     fn local_erase(&self, key: u64) -> Option<MemNodeMeta> {
-        let mut ret: Option<MemNodeMeta> = None;
+        let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
         self.table.wlock();
 
         match self.table.erase(key) {

@@ -4,12 +4,13 @@ use crate::memstore::memdb::MemDB;
 use crate::memstore::MemStoreValue;
 use crate::memstore::MemNodeMeta;
 
-use super::occ::{Occ, OccExecute, OccStatus, MemStoreItemEnum};
+use super::occ::{Occ, OccExecute, OccStatus, MemStoreItemEnum, LockContent};
 use super::rwset::{RwType, RwItem, RwSet};
 
 pub struct OccLocal<'trans, const MAX_ITEM_SIZE: usize> 
 {
     status:    OccStatus,
+    cid:       u32,
     memdb:     Arc<MemDB<'trans>>,
     readset:   RwSet<MAX_ITEM_SIZE>,
     updateset: RwSet<MAX_ITEM_SIZE>,
@@ -18,9 +19,10 @@ pub struct OccLocal<'trans, const MAX_ITEM_SIZE: usize>
 
 impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<'trans, MAX_ITEM_SIZE> 
 {
-    pub fn new(memdb: &Arc<MemDB<'trans>>) -> Self {
+    pub fn new(cid: u32, memdb: &Arc<MemDB<'trans>>) -> Self {
         Self {
             status:    OccStatus::OccUnint,
+            cid:       cid,
             memdb:     memdb.clone(),
             readset:   RwSet::new(),
             updateset: RwSet::new(),
@@ -36,12 +38,14 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccLocal<'trans, MAX_ITE
             return;
         }
 
+        let lock_content = LockContent::new(0, self.cid);
+
         for i in 0..self.writeset.get_len() {
             let item = self.writeset.bucket(i);
 
-            let meta = self.memdb.local_lock(item.table_id, item.key, item.lock).unwrap();
+            let meta = self.memdb.local_lock(item.table_id, item.key, lock_content.to_content()).unwrap();
 
-            if meta.lock != item.lock {
+            if meta.lock != lock_content.to_content() {
                 self.status = OccStatus::OccMustabort;
                 break;
             }
@@ -110,14 +114,16 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccLocal<'trans, MAX_ITE
             return;
         }
 
+        let lock_content = LockContent::new(0, self.cid);
+
         for i in 0..self.updateset.get_len() {
             let item = self.updateset.bucket(i);
-            self.memdb.local_unlock(item.table_id, item.key, item.lock);
+            self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
         }
 
         for i in 0..self.writeset.get_len() {
             let item = self.writeset.bucket(i);
-            self.memdb.local_unlock(item.table_id, item.key, item.lock);
+            self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
         }
     }
 
@@ -126,9 +132,11 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccLocal<'trans, MAX_ITE
             return;
         }
 
+        let lock_content = LockContent::new(0, self.cid);
+
         for i in 0..self.updateset.get_len() {
             let item = self.updateset.bucket(i);
-            self.memdb.local_unlock(item.table_id, item.key, item.lock);
+            self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
         }
 
         for i in 0..self.writeset.get_len() {
@@ -136,7 +144,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccLocal<'trans, MAX_ITE
 
             match item.rwtype {
                 RwType::ERASE | RwType::UPDATE => {
-                    self.memdb.local_unlock(item.table_id, item.key, item.lock);
+                    self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
                 },
                 RwType::INSERT => {
                     self.memdb.local_erase(item.table_id, item.key);
@@ -168,26 +176,23 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
             RwType::READ, 
             key, 
             MemStoreItemEnum::from_raw(value),
-            meta.lock, 
             meta.seq
         );
-
-        if meta.lock != 0 {
-            self.status = OccStatus::OccMustabort;
-        }
 
         self.readset.push(item);
         return self.readset.get_len() - 1;
     }
 
-    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, lock_content: u64) -> usize {
+    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
         // local
         assert_eq!(part_id, 0);
+
+        let lock_content = LockContent::new(0, self.cid);
 
         let mut value = T::default();
         let ptr = &mut value as *mut T as *mut u8;
         let len = std::mem::size_of::<T>();
-        let meta = self.memdb.local_get_for_upd(table_id, key, ptr, len as _, lock_content).unwrap();
+        let meta = self.memdb.local_get_for_upd(table_id, key, ptr, len as _, lock_content.to_content()).unwrap();
 
         let item = RwItem::new(
             table_id,
@@ -195,11 +200,10 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
             RwType::UPDATE,
             key,
             MemStoreItemEnum::from_raw(value),
-            lock_content,
             meta.seq
         );
 
-        if meta.lock != lock_content {
+        if meta.lock != lock_content.to_content() {
             self.status = OccStatus::OccMustabort;
         }
 
@@ -207,12 +211,13 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
         return self.updateset.get_len() - 1;
     }
 
-    fn write<T: MemStoreValue>(&mut self, table_id: usize,  part_id: u64, key: u64, lock_content: u64, rwtype: RwType) -> usize {
+    fn write<T: MemStoreValue>(&mut self, table_id: usize,  part_id: u64, key: u64, rwtype: RwType) -> usize {
         // local
         assert_eq!(part_id, 0);
 
+        let lock_content = LockContent::new(0, self.cid);
+
         let value = T::default();
-        let meta = MemNodeMeta::new(lock_content, 0);
 
         // lock later
         let item = RwItem::new(
@@ -221,8 +226,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
             rwtype,
             key,
             MemStoreItemEnum::from_raw(value),
-            meta.lock,
-            meta.seq
+            0
         );
 
         self.writeset.push(item);

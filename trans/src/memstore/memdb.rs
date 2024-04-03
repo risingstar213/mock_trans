@@ -60,6 +60,15 @@ impl<'memdb> MemDB<'memdb>
     }
 
     // local
+    pub fn get_item_length(&self, table_id: usize) -> usize {
+        if table_id >= self.metas.len() {
+            println!("the table does not exists!");
+            return 0;
+        }
+
+        self.tables[table_id].get_item_length()
+    }
+
     pub fn local_get_meta(&self, table_id: usize, key: u64) -> Option<MemNodeMeta>
     {
         if table_id >= self.metas.len() {

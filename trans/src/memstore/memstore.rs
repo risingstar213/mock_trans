@@ -132,6 +132,8 @@ impl MemNodeMeta {
 
 pub trait MemStore {
     // for remote operation
+    fn get_item_length(&self) -> usize;
+
     fn lock_shared(&self);
     fn unlock_shared(&self);
     fn lock_exclusive(&self);
