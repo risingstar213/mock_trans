@@ -1,4 +1,5 @@
 use super::occ::MemStoreItemEnum;
+#[derive(PartialEq, Eq)]
 pub enum RwType {
     READ,
     INSERT,

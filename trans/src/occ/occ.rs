@@ -74,8 +74,8 @@ impl<const ITEM_MAX_SIZE: usize> MemStoreItemEnum<ITEM_MAX_SIZE> {
         *ref_mut = value.clone();
     }
 
-    pub fn get_raw_ptr(&mut self) -> *mut u8 {
-        return &mut self.inner as *mut u8;
+    pub fn get_raw_ptr(&self) -> *const u8 {
+        return &self.inner as *const u8;
     }
 
     pub fn get_length(&self) -> u32 {
@@ -97,11 +97,11 @@ pub trait OccExecute {
 
     fn validate(&mut self);
 
-    fn log_write(&mut self);
+    fn log_writes(&mut self);
 
-    fn commit_write(&mut self);
+    fn commit_writes(&mut self);
 
-    fn unlock(&mut self);
+    fn release(&mut self);
 
     fn recover_on_aborted(&mut self);
 }

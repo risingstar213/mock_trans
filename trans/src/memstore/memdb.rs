@@ -120,7 +120,7 @@ impl<'memdb> MemDB<'memdb>
         self.tables[table_id].local_unlock(key, lock_content)
     }
 
-    pub fn local_upd_val_seq(&self, table_id: usize, key: u64, ptr: *mut u8, len: u32) -> Option<MemNodeMeta>
+    pub fn local_upd_val_seq(&self, table_id: usize, key: u64, ptr: *const u8, len: u32) -> Option<MemNodeMeta>
     {
         if table_id >= self.metas.len() {
             println!("the table does not exists!");

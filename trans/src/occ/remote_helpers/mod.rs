@@ -15,5 +15,12 @@ struct BatchRpcReqHeader {
 #[repr(C)]
 #[derive(Clone)]
 struct BatchRpcRespHeader {
-    num: u32
+    write: bool,
+    num:   u32,
+}
+
+#[repr(C)]
+#[derive(Clone)]
+struct BatchRpcReduceResp {
+    success: bool,
 }

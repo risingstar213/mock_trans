@@ -97,8 +97,9 @@ where
 
         match self.table.get(key) {
             Some(node) => {
-                node.try_lock(lock_content);
-                *value = node.get_value().clone();
+                if node.try_lock(lock_content) {
+                    *value = node.get_value().clone();
+                }
                 ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
             }
             None => {}

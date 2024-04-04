@@ -31,7 +31,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
             part_id:   part_id,
             cid:       cid,
             memdb:     memdb.clone(),
-            batch_rpc: BatchRpcCtrl::new(scheduler),
+            batch_rpc: BatchRpcCtrl::new(scheduler, cid),
             readset:   RwSet::new(),
             updateset: RwSet::new(),
             writeset:  RwSet::new(),
@@ -89,21 +89,6 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
         update_idx
     }
 
-    #[inline]
-    fn local_lock_write(&mut self, idx: usize, lock_content: u64) {
-
-        let item = self.writeset.bucket(idx);
-
-        let meta = self.memdb.local_lock(item.table_id, item.key, lock_content).unwrap();
-
-        if meta.lock != lock_content {
-            self.status = OccStatus::OccMustabort;
-        }
-    }
-}
-
-impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
-{
     // read
     #[inline]
     fn remote_read_rpc<T: MemStoreValue>(&mut self, table_id: usize,  part_id: u64, key: u64) -> usize {
@@ -115,7 +100,6 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
         };
         self.batch_rpc.append_req::<ReadReqItem>(
             &remote_req, 
-            self.cid, 
             part_id, 
             0, 
             occ_rpc_id::READ_RPC
@@ -145,7 +129,6 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
         };
         self.batch_rpc.append_req::<FetchWriteReqItem>(
             &remote_req, 
-            self.cid, 
             part_id, 
             0, 
             occ_rpc_id::FETCHWRITE_RPC
@@ -163,23 +146,142 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
 
         update_idx
     }
+}
 
+impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
+{
     #[inline]
-    fn remote_lock_writes_rpc(&mut self, idx: usize) {
-        let item = self.writeset.bucket(idx);
-
-        let remote_req = WriteReqItem{
-            table_id: item.table_id,
-            key:      item.key,
+    fn commit_writes_on(&mut self, update: bool) {
+        let ref_set = if update {
+            &mut self.updateset
+        } else {
+            &mut self.writeset
         };
 
-        self.batch_rpc.append_req::<WriteReqItem>(
-            &remote_req, 
-            self.cid, 
-            item.part_id, 
-            0, 
-            occ_rpc_id::WRITE_RPC
-        );
+        for i in 0..ref_set.get_len() {
+            let item = ref_set.bucket(i);
+
+            if item.part_id == self.part_id {
+                // local
+                match item.rwtype {
+                    RwType::ERASE => {
+                        self.memdb.local_erase(item.table_id, item.key);
+                    },
+                    RwType::INSERT | RwType::UPDATE => {
+                        let raw = item.value.get_raw_ptr();
+                        self.memdb.local_upd_val_seq(item.table_id, item.key, raw, MAX_ITEM_SIZE as u32);
+                    },
+                    _ => {}
+                }
+            } else {
+                // remote
+                match item.rwtype {
+                    RwType::ERASE => {
+                        let remote_req = CommitReqItem{
+                            table_id: item.table_id,
+                            key:      item.key,
+                            length:   0,
+                        };
+
+                        self.batch_rpc.append_req(
+                            &remote_req, 
+                            item.part_id, 
+                            0, 
+                            occ_rpc_id::COMMIT_RPC,
+                        );
+                    },
+                    RwType::INSERT | RwType::UPDATE => {
+                        let length = item.value.get_length();
+                        let remote_req = CommitReqItem{
+                            table_id: item.table_id,
+                            key:      item.key,
+                            length:   item.value.get_length(),
+                        };
+
+                        self.batch_rpc.append_req_with_data(
+                            &remote_req, 
+                            item.value.get_raw_ptr(), 
+                            length as usize, 
+                            item.part_id, 
+                            0, 
+                            occ_rpc_id::COMMIT_RPC,
+                        );
+                    },
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    #[inline]
+    fn release_on(&mut self, update: bool) {
+        let ref_set = if update {
+            &mut self.updateset
+        } else {
+            &mut self.writeset
+        };
+
+        let lock_content =  LockContent::new(self.part_id, self.cid);
+
+        for i in 0..ref_set.get_len() {
+            let item = ref_set.bucket(i);
+
+            if item.part_id == self.part_id {
+                self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
+            } else {
+                let remote_req = ReleaseReqItem{
+                    table_id: item.table_id,
+                    key:      item.key
+                };
+    
+                self.batch_rpc.append_req(
+                    &remote_req, 
+                    item.part_id, 
+                    0, 
+                    occ_rpc_id::RELEASE_RPC,
+                );
+            }
+        }
+    }
+
+    #[inline]
+    fn abort_on(&mut self, update: bool) {
+        let ref_set = if update {
+            &mut self.updateset
+        } else {
+            &mut self.writeset
+        };
+
+        let lock_content =  LockContent::new(self.part_id, self.cid);
+
+        for i in 0..ref_set.get_len() {
+            let item = ref_set.bucket(i);
+
+            if item.part_id == self.part_id {
+                match item.rwtype {
+                    RwType::ERASE | RwType::UPDATE => {
+                        self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
+                    },
+                    RwType::INSERT => {
+                        self.memdb.local_erase(item.table_id, item.key);
+                    },
+                    _ => {}
+                }
+            } else {
+                let remote_req = AbortReqItem{
+                    table_id: item.table_id,
+                    key:      item.key,
+                    insert:   item.rwtype == RwType::INSERT,
+                };
+    
+                self.batch_rpc.append_req(
+                    &remote_req, 
+                    item.part_id, 
+                    0, 
+                    occ_rpc_id::ABORT_RPC,
+                );
+            }
+        }
     }
 }
 
@@ -190,31 +292,85 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccRemote<'trans, MAX_IT
         for i in 0..self.writeset.get_len() {
             let item = self.writeset.bucket(i);
             if item.part_id == self.part_id {
-                self.local_lock_write(i, lock_content.to_content());
+                // local
+                let meta = self.memdb.local_lock(item.table_id, item.key, lock_content.to_content()).unwrap();
+
+                if meta.lock != lock_content.to_content() {
+                    self.status = OccStatus::OccMustabort;
+                }
             } else {
-                self.remote_lock_writes_rpc(i);
+                // remote
+                let remote_req = LockReqItem{
+                    table_id: item.table_id,
+                    key:      item.key,
+                };
+        
+                self.batch_rpc.append_req::<LockReqItem>(
+                    &remote_req, 
+                    item.part_id, 
+                    0, 
+                    occ_rpc_id::LOCK_RPC
+                );
             }
         }
+
+        self.batch_rpc.send_batch_reqs();
     }
 
     fn validate(&mut self) {
+        for i in 0..self.readset.get_len() {
+            let item = self.readset.bucket(i);
+            if item.part_id == self.part_id {
+                // local
+                let meta = self.memdb.local_get_meta(item.table_id, item.key).unwrap();
+
+                if meta.lock != 0 || (meta.seq != item.seq) {
+                    self.status = OccStatus::OccMustabort;
+                }
+            } else {
+                // remote
+                let remote_req = ValidateReqItem{
+                    table_id: item.table_id,
+                    key:      item.key,
+                    old_seq:  item.seq,
+                };
         
+                self.batch_rpc.append_req::<ValidateReqItem>(
+                    &remote_req, 
+                    item.part_id, 
+                    0, 
+                    occ_rpc_id::VALIDATE_RPC,
+                );
+            }
+        }
+
+        self.batch_rpc.send_batch_reqs();
+
     }
 
-    fn log_write(&mut self) {
-        
+    fn log_writes(&mut self) {
+        // unimplemented temporarily
     }
     
-    fn commit_write(&mut self) {
-        
+    fn commit_writes(&mut self) {
+        self.commit_writes_on(true);
+        self.commit_writes_on(false);
+
+        self.batch_rpc.send_batch_reqs();
     }
 
-    fn unlock(&mut self) {
-        
+    fn release(&mut self) {
+        self.release_on(true);
+        self.release_on(false);
+
+        self.batch_rpc.send_batch_reqs();
     }
 
     fn recover_on_aborted(&mut self) {
-        
+        self.abort_on(true);
+        self.abort_on(false);
+
+        self.batch_rpc.send_batch_reqs();
     }
 }
 

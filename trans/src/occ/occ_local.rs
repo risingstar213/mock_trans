@@ -68,11 +68,11 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccLocal<'trans, MAX_ITE
         }
     }
 
-    fn log_write(&mut self) {
+    fn log_writes(&mut self) {
         // unimplemented temporarily
     }
 
-    fn commit_write(&mut self) {
+    fn commit_writes(&mut self) {
         if self.status != OccStatus::OccInprogress {
             return;
         }
@@ -109,7 +109,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccLocal<'trans, MAX_ITE
         }
     }
 
-    fn unlock(&mut self) {
+    fn release(&mut self) {
         if self.status != OccStatus::OccInprogress {
             return;
         }
@@ -260,11 +260,11 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
             return self.abort();
         }
 
-        self.log_write();
+        self.log_writes();
 
-        self.commit_write();
+        self.commit_writes();
 
-        self.unlock();
+        self.release();
 
         self.status = OccStatus::OccCommited;
     }
