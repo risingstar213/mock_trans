@@ -4,7 +4,7 @@ use crate::memstore::memdb::MemDB;
 use crate::memstore::MemStoreValue;
 use crate::memstore::MemNodeMeta;
 
-use super::occ::{Occ, OccExecute, OccStatus, MemStoreItemEnum, LockContent};
+use super::occ::{OccStatus, MemStoreItemEnum, LockContent};
 use super::rwset::{RwType, RwItem, RwSet};
 
 pub struct OccLocal<'trans, const MAX_ITEM_SIZE: usize> 
@@ -31,7 +31,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<'trans, MAX_ITEM_SIZE>
     }
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccLocal<'trans, MAX_ITEM_SIZE>
+impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<'trans, MAX_ITEM_SIZE>
 {
     fn lock_writes(&mut self) {
         if self.status != OccStatus::OccInprogress {
@@ -155,13 +155,13 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccLocal<'trans, MAX_ITE
     }
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
+impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<'trans, MAX_ITEM_SIZE>
 {
-    fn start(&mut self) {
+    pub fn start(&mut self) {
         self.status = OccStatus::OccInprogress;
     }
     
-    fn read<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
+    pub fn read<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
         // local
         assert_eq!(part_id, 0);
 
@@ -183,7 +183,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
         return self.readset.get_len() - 1;
     }
 
-    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
+    pub fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
         // local
         assert_eq!(part_id, 0);
 
@@ -211,7 +211,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
         return self.updateset.get_len() - 1;
     }
 
-    fn write<T: MemStoreValue>(&mut self, table_id: usize,  part_id: u64, key: u64, rwtype: RwType) -> usize {
+    pub fn write<T: MemStoreValue>(&mut self, table_id: usize,  part_id: u64, key: u64, rwtype: RwType) -> usize {
         // local
         assert_eq!(part_id, 0);
 
@@ -233,7 +233,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
         return self.writeset.get_len() - 1;
     }
 
-    fn get_value<T: MemStoreValue>(&mut self, update: bool, idx: usize) -> &T {
+    pub fn get_value<T: MemStoreValue>(&mut self, update: bool, idx: usize) -> &T {
         if update {
             return self.updateset.bucket(idx).value.get_inner();
         } else {
@@ -241,7 +241,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
         }
     }
 
-    fn set_value<T: MemStoreValue>(&mut self, update: bool, idx: usize, value: &T) {
+    pub fn set_value<T: MemStoreValue>(&mut self, update: bool, idx: usize, value: &T) {
         if update {
             self.updateset.bucket(idx).value.set_inner(value);
         } else {
@@ -249,7 +249,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
         }
     }
 
-    fn commit(&mut self) {
+    pub fn commit(&mut self) {
         self.lock_writes();
         if self.status.eq(&OccStatus::OccMustabort) {
             return self.abort();
@@ -269,19 +269,19 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccLocal<'trans, MAX_ITEM_SIZE>
         self.status = OccStatus::OccCommited;
     }
 
-    fn abort(&mut self) {
+    pub fn abort(&mut self) {
         self.recover_on_aborted();
 
         self.status = OccStatus::OccAborted;
     }
 
     #[inline]
-    fn is_aborted(&self) -> bool {
+    pub fn is_aborted(&self) -> bool {
         self.status.eq(&OccStatus::OccAborted)
     }
 
     #[inline]
-    fn is_commited(&self) -> bool {
+    pub fn is_commited(&self) -> bool {
         self.status.eq(&OccStatus::OccCommited)
     }
 }

@@ -37,7 +37,7 @@ pub enum MemStoreType {
 
 pub struct MemDB<'memdb> {
     metas:  Vec<TableSchema>,
-    tables: Vec<Box<dyn MemStore + 'memdb>>,
+    tables: Vec<Box<dyn MemStore + Send + Sync + 'memdb>>,
 }
 
 impl<'memdb> MemDB<'memdb>
@@ -49,7 +49,7 @@ impl<'memdb> MemDB<'memdb>
         }
     }
 
-    pub fn add_schema(&mut self, table_id: usize, schema: TableSchema, table: impl MemStore + 'memdb) {
+    pub fn add_schema(&mut self, table_id: usize, schema: TableSchema, table: impl MemStore + Send + Sync + 'memdb) {
         let table_count = self.metas.len();
         if table_count != table_id {
             panic!("not rational add schema");

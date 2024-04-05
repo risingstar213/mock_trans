@@ -4,11 +4,14 @@ use crate::framework::scheduler;
 use crate::memstore::memdb::MemDB;
 use crate::memstore::MemStoreValue;
 use crate::framework::scheduler::AsyncScheduler;
+use crate::MAX_RESP_SIZE;
 
-use super::occ::{LockContent, MemStoreItemEnum, Occ, OccExecute, OccStatus};
+use super::occ::{LockContent, MemStoreItemEnum, OccStatus};
 use super::rwset::{RwSet, RwItem, RwType};
 use super::remote_helpers::batch_rpc_ctrl::BatchRpcCtrl;
 use super::remote_helpers::batch_rpc_proc::*;
+use super::remote_helpers::batch_rpc_msg_wrapper::BatchRpcRespWrapper;
+use super::remote_helpers::BatchRpcReduceResp;
 
 pub struct OccRemote<'trans, const MAX_ITEM_SIZE: usize>
 {
@@ -283,11 +286,73 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
             }
         }
     }
+
+    #[inline]
+    fn process_read_resp(&mut self, wrapper: &mut BatchRpcRespWrapper, num: u32) {
+        for _ in 0..num {
+            let item = wrapper.get_item::<ReadRespItem>();
+            let raw_data = wrapper.get_extra_data_const_ptr::<ReadRespItem>();
+
+            let bucket = self.readset.bucket(item.read_idx);
+            bucket.value.set_raw_data(raw_data, item.length as _);
+
+            wrapper.shift_to_next_item::<ReadRespItem>(item.length);
+        }
+    }
+
+    #[inline]
+    fn process_fetch_write_resp(&mut self, wrapper: &mut BatchRpcRespWrapper, num: u32) {
+        for _ in 0..num {
+            let item = wrapper.get_item::<FetchWriteRespItem>();
+            let raw_data = wrapper.get_extra_data_const_ptr::<FetchWriteRespItem>();
+
+            if item.length == 0 && item.seq == 0 {
+                self.status = OccStatus::OccMustabort;
+                break;
+            }
+
+            let bucket = self.updateset.bucket(item.update_idx);
+            bucket.value.set_raw_data(raw_data, item.length as _);
+
+            wrapper.shift_to_next_item::<FetchWriteRespItem>(item.length);
+        }
+    }
+
+    fn process_batch_rpc_resp(&mut self) {
+        let (mut resp_buf, resp_num) = self.batch_rpc.get_resp_buf_num().unwrap();
+
+        for _ in 0..resp_num {
+            let mut wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE);
+            let header = wrapper.get_header();
+            if header.write {
+                self.process_fetch_write_resp(&mut wrapper, header.num);
+            } else {
+                self.process_read_resp(&mut wrapper, header.num);
+            }
+
+            resp_buf = unsafe { resp_buf.byte_add(wrapper.get_off()) };
+        }
+    }
+    
+    fn process_batch_rpc_reduce_resp(&mut self) {
+        let (mut resp_buf, resp_num) = self.batch_rpc.get_resp_buf_num().unwrap();
+        for _ in 0..resp_num {
+            let reduce_resp = unsafe { (resp_buf as *const BatchRpcReduceResp).as_ref().unwrap() };
+            if !reduce_resp.success {
+                self.status = OccStatus::OccMustabort;
+                break;
+            }
+
+            resp_buf = unsafe { resp_buf.byte_add(std::mem::size_of::<BatchRpcReduceResp>()) };
+        }
+    }
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccRemote<'trans, MAX_ITEM_SIZE>
+impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
 {
-    fn lock_writes(&mut self) {
+    async fn lock_writes(&mut self) {
+        self.batch_rpc.restart_batch();
+
         let lock_content = LockContent::new(self.part_id, self.cid);
         for i in 0..self.writeset.get_len() {
             let item = self.writeset.bucket(i);
@@ -315,9 +380,13 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccRemote<'trans, MAX_IT
         }
 
         self.batch_rpc.send_batch_reqs();
+        self.batch_rpc.wait_until_done().await;
+
+        self.process_batch_rpc_reduce_resp();
     }
 
-    fn validate(&mut self) {
+    async fn validate(&mut self) {
+        self.batch_rpc.restart_batch();
         for i in 0..self.readset.get_len() {
             let item = self.readset.bucket(i);
             if item.part_id == self.part_id {
@@ -345,42 +414,51 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccExecute for OccRemote<'trans, MAX_IT
         }
 
         self.batch_rpc.send_batch_reqs();
+        self.batch_rpc.wait_until_done().await;
 
+        self.process_batch_rpc_reduce_resp();
     }
 
-    fn log_writes(&mut self) {
+    async fn log_writes(&mut self) {
         // unimplemented temporarily
     }
     
-    fn commit_writes(&mut self) {
+    async fn commit_writes(&mut self) {
+        self.batch_rpc.restart_batch();
         self.commit_writes_on(true);
         self.commit_writes_on(false);
 
         self.batch_rpc.send_batch_reqs();
+        self.batch_rpc.wait_until_done().await;
     }
 
-    fn release(&mut self) {
+    async fn release(&mut self) {
+        self.batch_rpc.restart_batch();
         self.release_on(true);
         self.release_on(false);
 
         self.batch_rpc.send_batch_reqs();
+        self.batch_rpc.wait_until_done().await;
     }
 
-    fn recover_on_aborted(&mut self) {
+    async fn recover_on_aborted(&mut self) {
+        self.batch_rpc.restart_batch();
         self.abort_on(true);
         self.abort_on(false);
 
         self.batch_rpc.send_batch_reqs();
+        self.batch_rpc.wait_until_done().await;
     }
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccRemote<'trans, MAX_ITEM_SIZE>
+impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
 {
-    fn start(&mut self) {
-        unimplemented!()
+    pub fn start(&mut self) {
+        self.batch_rpc.restart_batch();
+        self.status = OccStatus::OccInprogress;
     }
 
-    fn read<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
+    pub fn read<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
         if part_id == self.part_id {
             // local
             self.local_read::<T>(table_id, key)
@@ -391,7 +469,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccRemote<'trans, MAX_ITEM_SIZE
     }
 
     // fetch for write
-    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
+    pub fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize {
         if part_id == self.part_id {
             // local
             self.local_fetch_write::<T>(table_id, key)
@@ -401,7 +479,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccRemote<'trans, MAX_ITEM_SIZE
         }
     }
 
-    fn write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, rwtype: RwType) -> usize {
+    pub fn write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, rwtype: RwType) -> usize {
         let write_idx = self.writeset.get_len();
 
         // lock later
@@ -419,29 +497,62 @@ impl<'trans, const MAX_ITEM_SIZE: usize> Occ for OccRemote<'trans, MAX_ITEM_SIZE
         write_idx
     }
 
-    fn get_value<T: MemStoreValue>(&mut self, update: bool, idx: usize) -> &T {
-        unimplemented!()
+    pub async fn get_value<T: MemStoreValue + 'trans>(&mut self, update: bool, idx: usize) -> &T {
+        // TODO: more careful check
+        self.batch_rpc.send_batch_reqs();
+        self.batch_rpc.wait_until_done().await;
+
+        self.process_batch_rpc_resp();
+        self.batch_rpc.restart_batch();
+
+        if update {
+            return self.updateset.bucket(idx).value.get_inner();
+        } else {
+            return self.readset.bucket(idx).value.get_inner();
+        }
     }
 
-    fn set_value<T: MemStoreValue>(&mut self, update: bool, idx: usize, value: &T) {
-        unimplemented!()
+    pub fn set_value<T: MemStoreValue>(&mut self, update: bool, idx: usize, value: &T) {
+        if update {
+            self.updateset.bucket(idx).value.set_inner(value);
+        } else {
+            self.writeset.bucket(idx).value.set_inner(value);
+        }
     }
 
-    fn commit(&mut self) {
-        unimplemented!()
+    pub async fn commit(&mut self) {
+        self.lock_writes().await;
+        if self.status.eq(&OccStatus::OccMustabort) {
+            return self.abort().await;
+        }
+
+        self.validate().await;
+        if self.status.eq(&OccStatus::OccMustabort) {
+            return self.abort().await;
+        }
+
+        self.log_writes().await;
+
+        self.commit_writes().await;
+
+        self.release().await;
+
+        self.status = OccStatus::OccCommited;
     }
 
-    fn abort(&mut self) {
-        unimplemented!()
+    pub async fn abort(&mut self) {
+        self.recover_on_aborted().await;
+        
+        self.status = OccStatus::OccAborted;
     }
 
     #[inline]
-    fn is_aborted(&self) -> bool {
+    pub fn is_aborted(&self) -> bool {
         self.status.eq(&OccStatus::OccAborted)
     }
 
     #[inline]
-    fn is_commited(&self) -> bool {
+    pub fn is_commited(&self) -> bool {
         self.status.eq(&OccStatus::OccCommited)
     }
 }

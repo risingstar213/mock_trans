@@ -76,15 +76,11 @@ impl<'trans> BatchRpcCtrl<'trans>
         }
     }
     
-    pub fn reset_batch(&mut self) {
+    pub fn restart_batch(&mut self) {
         self.req_msgs.clear();
         self.peer_map.clear();
         self.resp_buf = None;
 
-        self.status = BatchRpcStatus::BatchUninit;
-    }
-
-    pub fn start_batch(&mut self) {
         self.status = BatchRpcStatus::BatchPendingReq;
     }
     
@@ -187,8 +183,8 @@ impl<'trans> BatchRpcCtrl<'trans>
         self.req_msgs[msg_idx].wrapper.shift_to_next_item::<T>(extra_len);
     }
 
-    pub async fn wait_until_done(&mut self, cid: u32) {
-        self.scheduler.yield_until_ready(cid).await;
+    pub async fn wait_until_done(&mut self) {
+        self.scheduler.yield_until_ready(self.cid).await;
     }
 
     pub fn get_resp_buf_num(&mut self) -> Option<(*mut u8, usize)> {

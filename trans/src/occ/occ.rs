@@ -81,6 +81,15 @@ impl<const ITEM_MAX_SIZE: usize> MemStoreItemEnum<ITEM_MAX_SIZE> {
     pub fn get_length(&self) -> u32 {
         return self.length;
     }
+
+    pub fn set_raw_data(&mut self, ptr: *const u8, len: u32) {
+        unsafe {
+            let dst = &mut self.inner as *mut _;
+            std::ptr::copy_nonoverlapping(ptr, dst, len as _);
+        }
+
+        self.length = len;
+    }
 }
 
 #[derive(PartialEq, Eq)]
@@ -92,40 +101,4 @@ pub enum OccStatus {
     OccAborted
 }
 
-pub trait OccExecute {
-    fn lock_writes(&mut self);
-
-    fn validate(&mut self);
-
-    fn log_writes(&mut self);
-
-    fn commit_writes(&mut self);
-
-    fn release(&mut self);
-
-    fn recover_on_aborted(&mut self);
-}
-
-pub trait Occ {
-    fn start(&mut self);
-
-    fn read<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize;
-
-    // fetch for write
-    fn fetch_write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64) -> usize;
-
-    fn write<T: MemStoreValue>(&mut self, table_id: usize, part_id: u64, key: u64, rwtype: RwType) -> usize;
-
-    fn get_value<T: MemStoreValue>(&mut self, update: bool, idx: usize) -> &T;
-
-    fn set_value<T: MemStoreValue>(&mut self, update: bool, idx: usize, value: &T);
-
-    fn commit(&mut self);
-
-    fn abort(&mut self);
-
-    fn is_aborted(&self) -> bool;
-
-    fn is_commited(&self) -> bool;
-}
 

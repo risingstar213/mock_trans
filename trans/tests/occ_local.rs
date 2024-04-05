@@ -1,11 +1,8 @@
-#![feature(get_mut_unchecked)]
-
 use std::sync::Arc;
 
 use trans::memstore::memdb::{MemDB, TableSchema};
 use trans::memstore::{MemStoreValue, RobinhoodMemStore};
 use trans::occ::occ_local::OccLocal;
-use trans::occ::Occ;
 use trans::occ::RwType;
 
 #[repr(C)]
@@ -102,9 +99,7 @@ fn occlocal_test()
     let mut memdb = Arc::new(MemDB::new());
     let memstore = RobinhoodMemStore::<Account>::new();
     
-    unsafe {
-        Arc::get_mut_unchecked(&mut memdb).add_schema(0, TableSchema::default(), memstore);
-    }
+    Arc::get_mut(&mut memdb).unwrap().add_schema(0, TableSchema::default(), memstore);
 
     prepare_data(&memdb);
 

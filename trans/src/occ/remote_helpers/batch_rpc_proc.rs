@@ -98,8 +98,17 @@ pub struct AbortReqItem {
 }
 
 pub struct BatchRpcProc<'worker> {
+    memdb:     Arc<MemDB<'worker>>,
     scheduler: Arc<AsyncScheduler<'worker>>,
-    memdb:     Arc<MemDB<'worker>>
+}
+
+impl<'worker> BatchRpcProc<'worker> {
+    pub fn new(memdb: &Arc<MemDB<'worker>>, scheduler: &Arc<AsyncScheduler<'worker>>) -> Self {
+        Self {
+            memdb: memdb.clone(),
+            scheduler: scheduler.clone(),
+        }
+    }
 }
 
 impl<'worker> BatchRpcProc<'worker> {
