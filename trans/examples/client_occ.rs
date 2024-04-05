@@ -46,7 +46,7 @@ impl<'worker> OccCtrlWorker<'worker> {
     async fn prepare_data(&self) {
         let mut occ1 = OccRemote::<8>::new(
             0, 
-            0, 
+            1, 
             &self.memdb,
             &self.scheduler,
         );
@@ -68,16 +68,16 @@ impl<'worker> OccCtrlWorker<'worker> {
 
         let mut occ2 = OccRemote::<8>::new(
             0, 
-            0, 
+            1, 
             &self.memdb,
             &self.scheduler,
         );
         occ2.start();
 
-        let idx = occ2.read::<Account>(0, 0, 10037);
+        let idx = occ2.read::<Account>(0, 1, 10037);
         assert_eq!(occ2.get_value::<Account>(false, idx).await.balance, 34567);
 
-        let idx = occ2.read::<Account>(0, 0, 13356);
+        let idx = occ2.read::<Account>(0, 1, 13356);
         assert_eq!(occ2.get_value::<Account>(false, idx).await.balance, 67890);
 
         occ2.commit().await;
@@ -88,7 +88,7 @@ impl<'worker> OccCtrlWorker<'worker> {
     async fn test_conflicts(&self) {
         let mut occ1 = OccRemote::<8>::new(
             0, 
-            0, 
+            1, 
             &self.memdb,
             &self.scheduler,
         );
@@ -96,20 +96,20 @@ impl<'worker> OccCtrlWorker<'worker> {
 
         let mut occ2 = OccRemote::<8>::new(
             0, 
-            1, 
+            2, 
             &self.memdb,
             &self.scheduler,
         );
         occ2.start();
 
-        let idx2 = occ2.read::<Account>(0, 0, 10037);
+        let idx2 = occ2.read::<Account>(0, 1, 10037);
         let balance2 = occ2.get_value::<Account>(false, idx2).await.balance;
-        let idx2 = occ2.write::<Account>(0, 0, 13356, RwType::UPDATE);
+        let idx2 = occ2.write::<Account>(0, 1, 13356, RwType::UPDATE);
         occ2.set_value::<Account>(false, idx2, &Account{
             balance: balance2,
         });
 
-        let idx1 = occ1.fetch_write::<Account>(0, 0, 13356);
+        let idx1 = occ1.fetch_write::<Account>(0, 1, 13356);
         let balance1 = occ1.get_value::<Account>(true, idx1).await.balance + 1;
 
         occ1.set_value(true, idx1, &Account{
@@ -124,11 +124,12 @@ impl<'worker> OccCtrlWorker<'worker> {
 
         let mut occ3 = OccRemote::<8>::new(
             0, 
-            3, 
+            1, 
             &self.memdb,
             &self.scheduler,
         );
-        let idx3 = occ3.read::<Account>(0, 0, 13356);
+        occ3.start();
+        let idx3 = occ3.read::<Account>(0, 1, 13356);
         let balance3 = occ3.get_value::<Account>(false, idx3).await.balance;
 
         assert_eq!(balance3, balance1);
@@ -163,10 +164,10 @@ async fn main() {
 
     // scheduler
     let mut rdma = RdmaControl::new(0);
-    rdma.connect(1, "10.10.10.7\0", "7472\0").unwrap();
+    rdma.connect(1, "10.10.10.6\0", "7472\0").unwrap();
 
     let allocator = rdma.get_allocator();
-    let scheduler = Arc::new(AsyncScheduler::new(2, &allocator));
+    let scheduler = Arc::new(AsyncScheduler::new(3, &allocator));
 
     let conn = rdma.get_connection(1);
     conn.lock().unwrap().init_and_start_recvs().unwrap();

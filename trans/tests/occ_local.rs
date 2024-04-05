@@ -83,6 +83,7 @@ fn test_conflicts(memdb: &Arc<MemDB>) {
     assert_eq!(occ1.is_commited(), true);
 
     let mut occ3 = OccLocal::<8>::new(3,memdb);
+    occ3.start();
     let idx3 = occ3.read::<Account>(0, 0, 13356);
     let balance3 = occ3.get_value::<Account>(false, idx3).balance;
 

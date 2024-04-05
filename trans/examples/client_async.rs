@@ -106,7 +106,7 @@ impl<'worker> RpcHandler for AskServerWorker<'worker> {
 #[tokio::main]
 async fn main() {
     let mut rdma = RdmaControl::new(0);
-    rdma.connect(1, "10.10.10.7\0", "7472\0").unwrap();
+    rdma.connect(1, "10.10.10.6\0", "7472\0").unwrap();
 
     let allocator = rdma.get_allocator();
     let scheduler = Arc::new(AsyncScheduler::new(2, &allocator));

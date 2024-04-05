@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use crate::framework::scheduler;
 use crate::memstore::memdb::MemDB;
 use crate::memstore::MemStoreValue;
 use crate::framework::scheduler::AsyncScheduler;
@@ -294,6 +293,8 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
             let raw_data = wrapper.get_extra_data_const_ptr::<ReadRespItem>();
 
             let bucket = self.readset.bucket(item.read_idx);
+
+            bucket.seq = item.seq;
             bucket.value.set_raw_data(raw_data, item.length as _);
 
             wrapper.shift_to_next_item::<ReadRespItem>(item.length);
@@ -485,7 +486,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
         // lock later
         let item = RwItem::new(
             table_id,
-            0,
+            part_id,
             rwtype,
             key,
             MemStoreItemEnum::default(),
