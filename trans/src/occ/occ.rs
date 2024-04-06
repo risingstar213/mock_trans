@@ -2,8 +2,6 @@ use byte_struct::*;
 
 use crate::memstore::MemStoreValue;
 
-use super::rwset::{RwSet, RwType};
-
 bitfields!(
     pub LockContent: u64 {
         pub peer_id: 54,
@@ -23,6 +21,7 @@ impl LockContent {
         self.to_raw()
     }
 
+    #[allow(unused)]
     pub fn from_content(content: u64) -> Self {
         Self::from_raw(content)
     }

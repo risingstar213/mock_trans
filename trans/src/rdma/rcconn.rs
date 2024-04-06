@@ -20,6 +20,8 @@ struct RdmaRcMeta {
     rid: u32,
 }
 
+
+// TODO: Pin the structure
 struct RdmaElement {
     recv_head: u64,
     rsges: [ibv_sge; MAX_RECV_SIZE],
