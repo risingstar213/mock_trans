@@ -1,5 +1,8 @@
 pub mod common;
+
+#[cfg(feature = "doca_deps")]
 pub mod doca_dma;
+
 pub mod framework;
 pub mod memstore;
 pub mod occ;
