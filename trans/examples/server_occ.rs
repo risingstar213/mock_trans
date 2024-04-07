@@ -54,25 +54,25 @@ impl<'worker> RpcHandler for OccProcWorker<'worker> {
         match rpc_id {
             occ_rpc_id::READ_RPC => {
                 self.proc.read_rpc_handler(src_conn, msg, size, meta);
-            },
+            }
             occ_rpc_id::FETCHWRITE_RPC => {
                 self.proc.fetch_write_rpc_handler(src_conn, msg, size, meta);
-            },
+            }
             occ_rpc_id::LOCK_RPC => {
                 self.proc.lock_rpc_handler(src_conn, msg, size, meta);
-            },
+            }
             occ_rpc_id::VALIDATE_RPC => {
                 self.proc.validate_rpc_handler(src_conn, msg, size, meta);
-            },
+            }
             occ_rpc_id::COMMIT_RPC => {
                 self.proc.commit_rpc_handler(src_conn, msg, size, meta);
-            },
+            }
             occ_rpc_id::RELEASE_RPC => {
                 self.proc.release_rpc_handler(src_conn, msg, size, meta);
-            },
+            }
             occ_rpc_id::ABORT_RPC => {
                 self.proc.abort_rpc_handler(src_conn, msg, size, meta);
-            },
+            }
             _ => {
                 unimplemented!();
             }

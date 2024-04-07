@@ -168,11 +168,11 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
                 match item.rwtype {
                     RwType::ERASE => {
                         self.memdb.local_erase(item.table_id, item.key);
-                    },
+                    }
                     RwType::INSERT | RwType::UPDATE => {
                         let raw = item.value.get_raw_ptr();
                         self.memdb.local_upd_val_seq(item.table_id, item.key, raw, MAX_ITEM_SIZE as u32);
-                    },
+                    }
                     _ => {}
                 }
             } else {
@@ -191,7 +191,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
                             0, 
                             occ_rpc_id::COMMIT_RPC,
                         );
-                    },
+                    }
                     RwType::INSERT | RwType::UPDATE => {
                         let length = item.value.get_length();
                         let remote_req = CommitReqItem{
@@ -208,7 +208,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
                             0, 
                             occ_rpc_id::COMMIT_RPC,
                         );
-                    },
+                    }
                     _ => {}
                 }
             }
@@ -263,10 +263,10 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
                 match item.rwtype {
                     RwType::ERASE | RwType::UPDATE => {
                         self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
-                    },
+                    }
                     RwType::INSERT => {
                         self.memdb.local_erase(item.table_id, item.key);
-                    },
+                    }
                     _ => {}
                 }
             } else {
