@@ -140,8 +140,6 @@ impl Device {
             return Err(ret);
         }
 
-        println!("get vec {:?}", pci_str);
-
         Ok(String::from(std::str::from_utf8(&pci_str[5..12]).unwrap()))
         // first check the `bus` part
         // let bus = unsafe { pci_bdf.__bindgen_anon_1.__bindgen_anon_1.bus() };
@@ -232,11 +230,11 @@ impl DevContext {
 pub fn open_device_with_pci(pci: &str) -> DOCAResult<Arc<DevContext>> {
     let dev_list = devices()?;
 
-    println!("cmp pci {:?}", pci.as_bytes().to_vec());
+    // println!("cmp pci {:?}", pci.as_bytes().to_vec());
     for i in 0..dev_list.num_devices() {
         let device = dev_list.get(i).unwrap();
         let pci_addr = device.name()?;
-        println!("get name {:?}, len = {}", pci_addr.as_bytes(), pci.len());
+        // println!("get name {:?}, len = {}", pci_addr.as_bytes(), pci.len());
         if pci_addr.eq(pci) {
             // open the device
             return device.open();

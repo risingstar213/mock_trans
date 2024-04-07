@@ -7,7 +7,7 @@ use trans::doca_dma::host_helpers::send_doca_config;
 
 fn main() {
 
-    let pci_addr = "af.00.0";
+    let pci_addr = "af:00.0";
     let cpy_txt = "This is a sample copy text";
 
     let length = cpy_txt.as_bytes().len();
