@@ -5,6 +5,8 @@ use std::hash::{BuildHasher, Hasher};
 
 use rand::prelude::*;
 
+use crate::common::region::RawArrayRegion;
+
 #[repr(C)]
 #[derive(Clone)]
 struct RobinHoodUnit<K, V>
@@ -140,13 +142,12 @@ where
 /// Need uniform marks
 /// But the size is restricted.
 /// How to implement?
-pub struct RobinHood<K, V>
+pub struct RobinHood<K, V, const INBUF_CAP: usize>
 where
     K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Default + Clone + Send + Sync,
 {
-    units: Vec<RobinHoodUnit<K, V>>,
-    inbuf_cap: usize,
+    units: RawArrayRegion<RobinHoodUnit<K, V>, INBUF_CAP>,
     dib_max: usize,
     inbuf_size: usize,
     // TODO: simple linked buckets
@@ -155,21 +156,14 @@ where
 }
 
 // (TODO:) expose memory to support one-side rdma primitives and dma functions
-impl<K, V> RobinHood<K, V>
+impl<K, V, const INBUF_CAP: usize> RobinHood<K, V, INBUF_CAP>
 where
     K: Default + Eq + PartialEq + Hash + Copy + Clone + Send + Sync,
     V: Default + Clone + Send + Sync,
 {
-    pub fn new(size: usize, dib_max: usize) -> Self {
-        let mut units = Vec::with_capacity(size);
-
-        for _ in 0..size {
-            units.push(RobinHoodUnit::default());
-        }
-
+    pub fn new(dib_max: usize) -> Self {
         Self {
-            units: units,
-            inbuf_cap: size,
+            units: RawArrayRegion::new(),
             dib_max: dib_max,
             inbuf_size: 0,
             of_buckets: HashMap::<K, V>::new(),
@@ -177,21 +171,11 @@ where
         }
     }
 
-    #[allow(unused)]
-    pub fn from_raw(size: usize, dib_max: usize) -> Self {
-        Self::new(size, dib_max)
-    }
-
-    #[allow(unused)]
-    pub fn into_raw(&self) -> *mut u8 {
-        std::ptr::null_mut()
-    }
-
     fn hash(&self, key: &K) -> usize {
         let mut hasher = self.hash_builder.build_hasher();
         key.hash(&mut hasher);
 
-        hasher.finish() as usize % self.inbuf_cap
+        hasher.finish() as usize % INBUF_CAP
     }
 
     // lookup for read or update
@@ -200,7 +184,7 @@ where
             return Some(value);
         }
 
-        let capacity = self.inbuf_cap;
+        let capacity = INBUF_CAP;
         let inds = self.hash(key);
         let mut ind = inds;
 
@@ -238,7 +222,7 @@ where
 
     // insert
     pub fn put(&mut self, key: &K, value: &V) {
-        let capacity = self.inbuf_cap;
+        let capacity = INBUF_CAP;
 
         if self.inbuf_size >= capacity {
             self.of_buckets.insert(*key, value.clone());
@@ -292,7 +276,7 @@ where
 
     #[inline]
     fn get_index_inbuf(&self, key: &K) -> Option<usize> {
-        let capacity = self.inbuf_cap;
+        let capacity = INBUF_CAP;
         let inds = self.hash(key);
         let mut ind = inds;
 
@@ -321,7 +305,7 @@ where
             return Some(value);
         }
 
-        let capacity = self.inbuf_cap;
+        let capacity = INBUF_CAP;
         if let Some(mut ind) = self.get_index_inbuf(key) {
             let old_value = self.units[ind].value.clone();
             self.units[ind] = RobinHoodUnit::default();
@@ -347,13 +331,13 @@ where
     }
 }
 
-impl<V> RobinHood<usize, V>
+impl<V, const INBUF_CAP: usize> RobinHood<usize, V, INBUF_CAP>
 where
     V: Default + Clone + Send + Sync,
 {
     #[allow(unused)]
     fn print_store(&self) {
-        let capacity = self.inbuf_cap;
+        let capacity = INBUF_CAP;
         for i in 0..capacity {
             print!(
                 "({}, {}, {})",
@@ -397,7 +381,7 @@ fn stress_sequential(steps: usize) {
     ];
 
     let mut rng = thread_rng();
-    let mut map = RobinHood::<usize, usize>::new(1000, 4);
+    let mut map = RobinHood::<usize, usize, 1000>::new(4);
     let mut hashmap = HashMap::<usize, usize>::new();
 
     for i in 0..steps {
@@ -432,7 +416,7 @@ fn stress_sequential(steps: usize) {
                 let _ = map.put(&key, &value);
                 hashmap.entry(key).or_insert(value);
 
-                map.print_store();
+                // map.print_store();
             }
             Ops::DeleteSome => {
                 let key = hashmap.keys().choose(&mut rng).map(|k| k.clone());
@@ -440,7 +424,7 @@ fn stress_sequential(steps: usize) {
                     println!("iteration {}: delete({:?}) (existing)", i, key);
                     assert_eq!(map.erase(&key).ok_or(()), hashmap.remove(&key).ok_or(()));
 
-                    map.print_store();
+                    // map.print_store();
                 }
             }
             Ops::DeleteNone => {

@@ -1,5 +1,3 @@
-#![feature(get_mut_unchecked)]
-
 use clap::{arg, App, AppSettings};
 use doca::{dma::DOCAContext, *};
 
@@ -44,11 +42,10 @@ fn main() {
     let mut workq = DOCAWorkQueue::new(1, &ctx).unwrap();
 
     let mut doca_mmap = Arc::new(DOCAMmap::new().unwrap());
-    unsafe {
-        Arc::get_mut_unchecked(&mut doca_mmap)
-            .add_device(&device)
-            .unwrap()
-    };
+    Arc::get_mut(&mut doca_mmap)
+        .unwrap()
+        .add_device(&device)
+        .unwrap();
 
     // Create the remote mmap
     #[allow(unused_mut)]

@@ -23,7 +23,7 @@ where
     T: MemStoreValue,
 {
     rwlock: AtomicU32,
-    table: UnsafeCell<RobinHood<u64, MemNode<T>>>,
+    table: UnsafeCell<RobinHood<u64, MemNode<T>, ROBINHOOD_SIZE>>,
 }
 
 unsafe impl<T> Send for RobinHoodTableCell<T> where T: MemStoreValue {}
@@ -36,7 +36,7 @@ where
     pub fn new() -> Self {
         Self {
             rwlock: AtomicU32::new(0),
-            table:  UnsafeCell::new(RobinHood::<u64, MemNode<T>>::new(ROBINHOOD_SIZE, ROBINHOOD_DIB_MAX))
+            table:  UnsafeCell::new(RobinHood::new(ROBINHOOD_DIB_MAX))
         }
     }
     
