@@ -89,8 +89,8 @@ pub struct DOCADMAJob {
     #[allow(dead_code)]
     ctx: Arc<DOCAContext<DMAEngine>>,
 
-    src_buff: Option<DOCABuffer>,
-    dst_buff: Option<DOCABuffer>,
+    src_buff: Option<Arc<DOCABuffer>>,
+    dst_buff: Option<Arc<DOCABuffer>>,
 }
 
 /// Implementation of `ToBaseJob` Trait
@@ -102,16 +102,16 @@ impl ToBaseJob for DOCADMAJob {
 
 impl DOCADMAJob {
     /// Set request's destination buffer
-    pub fn set_dst(&mut self, buf: DOCABuffer) -> &mut Self {
+    pub fn set_dst(&mut self, buf: &Arc<DOCABuffer>) -> &mut Self {
         unsafe { self.inner.dst_buff = buf.inner_ptr() };
-        self.dst_buff = Some(buf);
+        self.dst_buff = Some(buf.clone());
         self
     }
 
     /// Set request's source buffer
-    pub fn set_src(&mut self, buf: DOCABuffer) -> &mut Self {
+    pub fn set_src(&mut self, buf: &Arc<DOCABuffer>) -> &mut Self {
         unsafe { self.inner.src_buff = buf.inner_ptr() };
-        self.src_buff = Some(buf);
+        self.src_buff = Some(buf.clone());
         self
     }
 
@@ -119,7 +119,7 @@ impl DOCADMAJob {
     #[inline]
     pub fn set_src_data(&mut self, offset: usize, payload: usize) {
         if let Some(f) = self.src_buff.as_mut() {
-             unsafe { f.set_data(offset, payload).expect("doca fail to set src data!") };
+             unsafe { Arc::get_mut(f).unwrap().set_data(offset, payload).expect("doca fail to set src data!") };
         }
     }
 
@@ -127,8 +127,15 @@ impl DOCADMAJob {
     #[inline]
     pub fn set_dst_data(&mut self, offset: usize, payload: usize) {
         if let Some(f) = self.dst_buff.as_mut() {
-            unsafe { f.set_data(offset, payload).expect("doca fail to set dst data!") };
+            unsafe { Arc::get_mut(f).unwrap().set_data(offset, payload).expect("doca fail to set dst data!") };
        }
+    }
+
+    /// Set mark for user data
+    #[inline]
+    pub fn set_user_data(&mut self, user_data: u64) -> &mut Self {
+        self.inner.base.user_data.u64_ = user_data;
+        self
     }
 
     /// Set request's based context
@@ -152,7 +159,7 @@ impl DOCADMAJob {
 
 impl DOCAWorkQueue<DMAEngine> {
     /// Create a DMA job
-    pub fn create_dma_job(&self, src_buf: DOCABuffer, dst_buf: DOCABuffer) -> DOCADMAJob {
+    pub fn create_dma_job(&self, src_buf: &Arc<DOCABuffer>, dst_buf: &Arc<DOCABuffer>) -> DOCADMAJob {
         let mut res = DOCADMAJob {
             inner: Default::default(),
             ctx: self.ctx.clone(),

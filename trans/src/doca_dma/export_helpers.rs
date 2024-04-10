@@ -16,10 +16,10 @@ use std::sync::Arc;
 use doca::dma::DOCAContext;
 use doca::{ DOCAMmap, DOCARegisteredMemory, BufferInventory, DOCAWorkQueue, DMAEngine, RawPointer, RawPointerMsg };
 
-use super::connections::DocaConnInfo;
+use crate::common::connection::send_config;
+use super::config::{ DocaConnInfo, DocaConnInfoMsg };
 
 pub fn send_doca_config(addr: SocketAddr, num_dev: usize, doca_mmap: &mut Arc<DOCAMmap>, src_buf: RawPointer) {
-    let mut stream = TcpStream::connect(addr).unwrap();
     let mut doca_conn: DocaConnInfo = Default::default();
 
     for i in 0..num_dev {
@@ -34,5 +34,5 @@ pub fn send_doca_config(addr: SocketAddr, num_dev: usize, doca_mmap: &mut Arc<DO
         });
     }
     doca_conn.buffers.push(src_buf);
-    stream.write(DocaConnInfo::serialize(doca_conn).as_slice()).unwrap();
+    send_config::<DocaConnInfoMsg>(addr, doca_conn.into())
 }

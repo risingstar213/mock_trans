@@ -6,8 +6,9 @@
  */
 
 use doca::{ RawPointer, RawPointerMsg, DOCAMmap };
-use doca::open_device_with_pci;
 use serde_derive::{ Serialize, Deserialize };
+
+use crate::common::connection::ConfigSerialize;
 
 pub const DOCA_MAX_CONN_LENGTH: usize = 4096;
 
@@ -50,15 +51,13 @@ impl From<DocaConnInfoMsg> for DocaConnInfo {
     }
 }
 
-impl DocaConnInfo {
-    pub fn serialize(data: DocaConnInfo) -> Vec<u8> {
-        let msg: DocaConnInfoMsg = data.into();
-        serde_json::to_vec(&msg).unwrap()
+impl ConfigSerialize for DocaConnInfoMsg {
+    fn serialize(data: DocaConnInfoMsg) -> Vec<u8> {
+        serde_json::to_vec(&data).unwrap()
     }
 
-    pub fn deserialize(data: &[u8]) -> DocaConnInfo {
+    fn deserialize(data: &[u8]) -> DocaConnInfoMsg {
         let msg: DocaConnInfoMsg = serde_json::from_slice(data).unwrap();
-        let data: DocaConnInfo = msg.into();
-        data
+        msg
     }
 }

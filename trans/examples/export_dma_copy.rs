@@ -3,11 +3,11 @@ use std::{ptr::NonNull, sync::Arc};
 use doca::*;
 use doca_sys::*;
 
-use trans::doca_dma::host_helpers::send_doca_config;
+use trans::doca_dma::export_helpers::send_doca_config;
 
 fn main() {
 
-    let pci_addr = "af:00.0";
+    let pci_addr = "03:00.0";
     let cpy_txt = "This is a sample copy text";
 
     let length = cpy_txt.as_bytes().len();
@@ -55,7 +55,7 @@ fn main() {
     //     export_file, buffer_file
     // );
 
-    send_doca_config("192.168.100.2:7473".parse().unwrap(), 1, &mut local_mmap, src_raw);
+    send_doca_config("192.168.100.1:7473".parse().unwrap(), 1, &mut local_mmap, src_raw);
 
     let r = running.clone();
     ctrlc::set_handler(move || {

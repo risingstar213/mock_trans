@@ -3,20 +3,14 @@ use doca::{dma::DOCAContext, *};
 
 use std::sync::Arc;
 
-use trans::doca_dma::dpu_helpers::{ recv_doca_config, load_doca_config };
-use trans::doca_dma::connections::{ DocaConnInfo };
+use trans::doca_dma::process_helpers::{ recv_doca_config, load_doca_config };
+use trans::doca_dma::config::{ DocaConnInfo };
 
 fn main() {
 
-    let pci_addr = "03:00.0";
-    // let export_file = matches.value_of("export").unwrap_or("/tmp/export.txt");
-    // let buffer_file = matches.value_of("buffer").unwrap_or("/tmp/buffer.txt");
+    let pci_addr = "af:00.0";
 
-    // // Get information to construct the remote Memory Pool
-    // let remote_configs = doca::load_config(export_file, buffer_file).unwrap();
-
-    let conn = recv_doca_config("0.0.0.0:7473".parse().unwrap());
-    let doca_conn = DocaConnInfo::deserialize(conn.as_slice());
+    let doca_conn = recv_doca_config("0.0.0.0:7473".parse().unwrap());
     let remote_config = load_doca_config(0, &doca_conn).unwrap();
 
     println!(
@@ -54,26 +48,27 @@ fn main() {
 
     let inv = BufferInventory::new(1024).unwrap();
     let mut dma_src_buf =
-        DOCARegisteredMemory::new_from_remote(&remote_mmap, remote_config.remote_addr)
+        Arc::new(DOCARegisteredMemory::new_from_remote(&remote_mmap, remote_config.remote_addr)
             .unwrap()
             .to_buffer(&inv)
-            .unwrap();
+            .unwrap());
     unsafe {
-        dma_src_buf
+        Arc::get_mut(&mut dma_src_buf)
+            .unwrap()
             .set_data(0, remote_config.remote_addr.payload)
             .unwrap()
     };
 
     let dma_dst_buf =
-        DOCARegisteredMemory::new(&doca_mmap, unsafe { RawPointer::from_box(&dpu_buffer) })
+        Arc::new(DOCARegisteredMemory::new(&doca_mmap, unsafe { RawPointer::from_box(&dpu_buffer) })
             .unwrap()
             .to_buffer(&inv)
-            .unwrap();
+            .unwrap());
 
     doca_mmap.start().unwrap();
 
     /* Start to submit the DMA job!  */
-    let job = workq.create_dma_job(dma_src_buf, dma_dst_buf);
+    let job = workq.create_dma_job(&dma_src_buf, &dma_dst_buf);
     workq.submit(&job).expect("failed to submit the job");
 
     loop {
