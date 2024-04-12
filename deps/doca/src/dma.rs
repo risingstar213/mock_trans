@@ -89,8 +89,8 @@ pub struct DOCADMAJob {
     #[allow(dead_code)]
     ctx: Arc<DOCAContext<DMAEngine>>,
 
-    src_buff: Option<Arc<DOCABuffer>>,
-    dst_buff: Option<Arc<DOCABuffer>>,
+    src_buff: Option<DOCABuffer>,
+    dst_buff: Option<DOCABuffer>,
 }
 
 /// Implementation of `ToBaseJob` Trait
@@ -102,16 +102,16 @@ impl ToBaseJob for DOCADMAJob {
 
 impl DOCADMAJob {
     /// Set request's destination buffer
-    pub fn set_dst(&mut self, buf: &Arc<DOCABuffer>) -> &mut Self {
+    pub fn set_dst(&mut self, buf: DOCABuffer) -> &mut Self {
         unsafe { self.inner.dst_buff = buf.inner_ptr() };
-        self.dst_buff = Some(buf.clone());
+        self.dst_buff = Some(buf);
         self
     }
 
     /// Set request's source buffer
-    pub fn set_src(&mut self, buf: &Arc<DOCABuffer>) -> &mut Self {
+    pub fn set_src(&mut self, buf: DOCABuffer) -> &mut Self {
         unsafe { self.inner.src_buff = buf.inner_ptr() };
-        self.src_buff = Some(buf.clone());
+        self.src_buff = Some(buf);
         self
     }
 
@@ -119,7 +119,7 @@ impl DOCADMAJob {
     #[inline]
     pub fn set_src_data(&mut self, offset: usize, payload: usize) {
         if let Some(f) = self.src_buff.as_mut() {
-             unsafe { Arc::get_mut(f).unwrap().set_data(offset, payload).expect("doca fail to set src data!") };
+            unsafe { f.set_data(offset, payload).expect("doca fail to set src data!") };
         }
     }
 
@@ -127,7 +127,7 @@ impl DOCADMAJob {
     #[inline]
     pub fn set_dst_data(&mut self, offset: usize, payload: usize) {
         if let Some(f) = self.dst_buff.as_mut() {
-            unsafe { Arc::get_mut(f).unwrap().set_data(offset, payload).expect("doca fail to set dst data!") };
+            unsafe { f.set_data(offset, payload).expect("doca fail to set dst data!") };
        }
     }
 
@@ -157,9 +157,101 @@ impl DOCADMAJob {
     }
 }
 
+/// A DOCA DMA request
+pub struct DOCADMAReusableJob {
+    pub(crate) inner_read: ffi::doca_dma_job_memcpy,
+    pub(crate) inner_write: ffi::doca_dma_job_memcpy,
+
+    write: bool,
+
+    // FIXME: do we really need to record the context here?
+    #[allow(dead_code)]
+    ctx: Arc<DOCAContext<DMAEngine>>,
+
+    local_buf: Option<DOCABuffer>,
+    remote_buf: Option<DOCABuffer>,
+}
+
+/// Implementation of `ToBaseJob` Trait
+impl ToBaseJob for DOCADMAReusableJob {
+    fn to_base(&self) -> &ffi::doca_job {
+        if self.write {
+            &self.inner_write.base
+        } else {
+            &self.inner_read.base
+        }
+    }
+}
+
+impl DOCADMAReusableJob {
+    /// Set request's destination buffer
+    pub fn set_local(&mut self, buf: DOCABuffer) -> &mut Self {
+        unsafe { self.inner_read.dst_buff = buf.inner_ptr() };
+        unsafe { self.inner_write.src_buff = buf.inner_ptr() };
+        self.local_buf = Some(buf);
+        self
+    }
+
+    /// Set request's source buffer
+    pub fn set_remote(&mut self, buf: DOCABuffer) -> &mut Self {
+        unsafe { self.inner_read.src_buff = buf.inner_ptr() };
+        unsafe { self.inner_write.dst_buff = buf.inner_ptr() };
+        self.remote_buf = Some(buf);
+        self
+    }
+
+    /// Set the data pointer of the src buffer
+    #[inline]
+    pub fn set_local_data(&mut self, offset: usize, payload: usize) {
+        if let Some(f) = self.local_buf.as_mut() {
+            unsafe { f.set_data(offset, payload).expect("doca fail to set src data!") };
+        }
+    }
+
+    /// Set the data pointer of the dst buffer
+    #[inline]
+    pub fn set_remote_data(&mut self, offset: usize, payload: usize) {
+        if let Some(f) = self.remote_buf.as_mut() {
+            unsafe { f.set_data(offset, payload).expect("doca fail to set dst data!") };
+       }
+    }
+
+    /// Set mark for user data
+    #[inline]
+    pub fn set_user_data_write(&mut self, user_data: u64, write: bool) {
+        self.write = write;
+        if write {
+            self.inner_write.base.user_data.u64_ = user_data;
+        } else {
+            self.inner_read.base.user_data.u64_ = user_data;
+        }
+    }
+
+    /// Set request's based context
+    fn set_ctx(&mut self) -> &mut Self {
+        unsafe { self.inner_read.base.ctx = self.ctx.inner_ptr() };
+        unsafe { self.inner_write.base.ctx = self.ctx.inner_ptr() };
+        self
+    }
+
+    /// Set request's flags
+    fn set_flags(&mut self) -> &mut Self {
+        self.inner_read.base.flags = ffi::DOCA_JOB_FLAGS_NONE as i32;
+        self.inner_write.base.flags = ffi::DOCA_JOB_FLAGS_NONE as i32;
+        self
+    }
+
+    /// Set request's type
+    fn set_type(&mut self) -> &mut Self {
+        self.inner_read.base.type_ = ffi::DOCA_DMA_JOB_MEMCPY as i32;
+        self.inner_write.base.type_ = ffi::DOCA_DMA_JOB_MEMCPY as i32;
+        self
+    }
+}
+
 impl DOCAWorkQueue<DMAEngine> {
     /// Create a DMA job
-    pub fn create_dma_job(&self, src_buf: &Arc<DOCABuffer>, dst_buf: &Arc<DOCABuffer>) -> DOCADMAJob {
+    pub fn create_dma_job(&self, src_buf: DOCABuffer, dst_buf: DOCABuffer) -> DOCADMAJob {
         let mut res = DOCADMAJob {
             inner: Default::default(),
             ctx: self.ctx.clone(),
@@ -170,6 +262,24 @@ impl DOCAWorkQueue<DMAEngine> {
             .set_flags()
             .set_src(src_buf)
             .set_dst(dst_buf)
+            .set_type();
+        res
+    }
+
+    /// Create a DMA job 
+    pub fn create_dma_reusable_job(&self, local_buf: DOCABuffer, remote_buf: DOCABuffer) -> DOCADMAReusableJob {
+        let mut res = DOCADMAReusableJob {
+            inner_read: Default::default(),
+            inner_write: Default::default(),
+            write: false,
+            ctx: self.ctx.clone(),
+            local_buf: None,
+            remote_buf: None,
+        };
+        res.set_ctx()
+            .set_flags()
+            .set_local(local_buf)
+            .set_remote(remote_buf)
             .set_type();
         res
     }

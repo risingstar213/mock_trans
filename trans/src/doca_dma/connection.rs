@@ -1,3 +1,4 @@
+use doca::dma::DOCADMAReusableJob;
 use libc::memalign;
 use libc::free;
 use std::net::SocketAddr;
@@ -51,28 +52,25 @@ impl DocaDmaControl {
         let inv = BufferInventory::new(64).unwrap();
         // remote buf
         let mut remote_buf = 
-            Arc::new(DOCARegisteredMemory::new_from_remote(&remote_mmap, config.remote_addr)
+            DOCARegisteredMemory::new_from_remote(&remote_mmap, config.remote_addr)
                 .unwrap()
                 .to_buffer(&inv)
-                .unwrap());
+                .unwrap();
         unsafe {
-            Arc::get_mut(&mut remote_buf)
-                .unwrap()
-                .set_data(0, config.remote_addr.payload)
-                .unwrap()
-        };
+            remote_buf.set_data(0, config.remote_addr.payload).unwrap();
+        }
         // local buf
         let lm_length = coroutine_num * MAX_DMA_BUF_SIZE * MAX_DMA_BUF_PER_ROUTINE;
         let lm = unsafe { memalign(4096, lm_length) } as *mut u8;
         let local_buf = 
-            Arc::new(DOCARegisteredMemory::new(&doca_mmap, unsafe { RawPointer::from_raw_ptr(lm, lm_length) })
+            DOCARegisteredMemory::new(&doca_mmap, unsafe { RawPointer::from_raw_ptr(lm, lm_length) })
                 .unwrap()
                 .to_buffer(&inv)
-                .unwrap());
+                .unwrap();
         
         doca_mmap.start().unwrap();
 
-        let conn = Arc::new(DocaDmaConn::new(&workq, &local_buf, &remote_buf, lm, coroutine_num));
+        let conn = Arc::new(DocaDmaConn::new(&workq, local_buf, remote_buf, lm, coroutine_num));
 
         self.conn = Some(conn);
 
@@ -89,10 +87,6 @@ impl DocaDmaControl {
 
         // first malloc the source buffer
         let mut src_buffer = vec![0u8; buffer_length].into_boxed_slice();
-
-        // copy the text into src_buffer
-        let str = String::from_utf8(src_buffer.to_vec()).unwrap();
-        println!("src_buffer check: {}", str);
 
         // Open device
         let device = doca::device::open_device_with_pci(pci_addr).unwrap();
@@ -135,47 +129,44 @@ impl DocaDmaControl {
 pub struct DocaDmaConn {
     lm:            *mut u8,
     workq:         Arc<DOCAWorkQueue<DMAEngine>>,
-    read_dma_job:  DOCADMAJob,
-    write_dma_job: DOCADMAJob,
+    dma_job:       DOCADMAReusableJob,
     local_alloc:   DmaLocalBufAllocator,
     remote_alloc:  DmaRemoteBufAllocator,
 }
 
 impl DocaDmaConn {
-    pub fn new(workq: &Arc<DOCAWorkQueue<DMAEngine>>, local_buf: &Arc<DOCABuffer>, remote_buf: &Arc<DOCABuffer>, lm: *mut u8, coroutine_num: usize) -> Self {
-        let read_dma_job = workq.create_dma_job(remote_buf, local_buf);
-        let write_dma_job = workq.create_dma_job(local_buf, remote_buf);
+    pub fn new(workq: &Arc<DOCAWorkQueue<DMAEngine>>, local_buf: DOCABuffer, remote_buf: DOCABuffer, lm: *mut u8, coroutine_num: usize) -> Self {
+        let dma_job = workq.create_dma_reusable_job(local_buf, remote_buf);
         Self {
             lm: lm,
             workq: workq.clone(),
-            read_dma_job: read_dma_job,
-            write_dma_job: write_dma_job,
-            local_alloc:  DmaLocalBufAllocator::new(coroutine_num as _, lm as _, coroutine_num),
+            dma_job: dma_job,
+            local_alloc:  DmaLocalBufAllocator::new(coroutine_num as _, lm as _, coroutine_num as usize * MAX_DMA_BUF_PER_ROUTINE * MAX_DMA_BUF_SIZE),
             remote_alloc: DmaRemoteBufAllocator::new(),
         }
     }
 
     #[inline]
-    pub fn post_read_dma_reqs(&mut self, src_offset: usize, dst_offset: usize, payload: usize, user_mark: u64) {
-        self.read_dma_job.set_src_data(src_offset, payload);
-        self.read_dma_job.set_dst_data(dst_offset, payload);
-        self.read_dma_job.set_user_data(user_mark);
+    pub fn post_read_dma_reqs(&mut self, local_offset: usize, remote_offset: usize, payload: usize, user_mark: u64) {
+        self.dma_job.set_local_data(local_offset, payload);
+        self.dma_job.set_remote_data(remote_offset, payload);
+        self.dma_job.set_user_data_write(user_mark, false);
 
         Arc::get_mut(&mut self.workq)
             .unwrap()
-            .submit(&self.read_dma_job)
+            .submit(&self.dma_job)
             .unwrap();
     }
 
     #[inline]
-    pub fn post_write_dma_reqs(&mut self, src_offset: usize, dst_offset: usize, payload: usize, user_mark: u64) {
-        self.write_dma_job.set_src_data(src_offset, payload);
-        self.write_dma_job.set_dst_data(dst_offset, payload);
-        self.write_dma_job.set_user_data(user_mark);
+    pub fn post_write_dma_reqs(&mut self, local_offset: usize, remote_offset: usize, payload: usize, user_mark: u64) {
+        self.dma_job.set_local_data(local_offset, payload);
+        self.dma_job.set_remote_data(remote_offset, payload);
+        self.dma_job.set_user_data_write(user_mark, true);
 
         Arc::get_mut(&mut self.workq)
             .unwrap()
-            .submit(&self.write_dma_job)
+            .submit(&self.dma_job)
             .unwrap();
     }
 
