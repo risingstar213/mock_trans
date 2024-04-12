@@ -2,7 +2,7 @@ use doca::dma::DOCADMAReusableJob;
 use libc::memalign;
 use libc::free;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::{ Arc, Mutex };
 use std::ptr::NonNull;
 
 use doca::{open_device_with_pci, DOCAEvent};
@@ -19,7 +19,7 @@ use super::dma_shared_buffer::{ DmaLocalBuf, DmaLocalBufAllocator };
 use super::dma_shared_buffer::{ DmaRemoteBuf, DmaRemoteBufAllocator };
 
 pub struct DocaDmaControl {
-    conn: Option<Arc<DocaDmaConn>>,
+    conn: Option<Arc<Mutex<DocaDmaConn>>>,
 }
 
 impl DocaDmaControl {
@@ -70,13 +70,13 @@ impl DocaDmaControl {
         
         doca_mmap.start().unwrap();
 
-        let conn = Arc::new(DocaDmaConn::new(&workq, local_buf, remote_buf, lm, coroutine_num));
+        let conn = Arc::new(Mutex::new(DocaDmaConn::new(&workq, local_buf, remote_buf, lm, coroutine_num)));
 
         self.conn = Some(conn);
 
     }
 
-    pub fn get_conn(&self) -> Option<Arc<DocaDmaConn>> {
+    pub fn get_conn(&self) -> Option<Arc<Mutex<DocaDmaConn>>> {
         self.conn.clone()
     }
 
