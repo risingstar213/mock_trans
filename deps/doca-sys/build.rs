@@ -59,7 +59,7 @@ fn main() {
         .size_t_is_usize(true)
         // .constified_enum_module("doca_error")
         .rustified_enum("doca_error")
-        .rustified_enum("doca_access_flags")
+        .bitfield_enum("doca_access_flags")
         .generate()
         .expect("Unable to generate bindings");
 

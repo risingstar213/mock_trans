@@ -35,7 +35,7 @@ pub mod buffer;
 pub mod registered_memory;
 
 use core::ffi::c_void;
-use ffi::{doca_access_flags, doca_error, doca_mmap_set_memrange, doca_mmap_set_permissions};
+use ffi::{doca_error, doca_mmap_set_memrange, doca_mmap_set_permissions};
 // use page_size;
 use std::ptr::NonNull;
 use std::sync::Arc;
@@ -273,7 +273,7 @@ impl DOCAMmap {
 
     /// Set permmisions
     ///
-    pub fn set_permission(&mut self, mask: doca_access_flags) -> DOCAResult<()> {
+    pub fn set_permission(&mut self, mask: u32) -> DOCAResult<()> {
         let ret = unsafe {
             doca_mmap_set_permissions(
                 self.inner_ptr(), 
@@ -355,7 +355,7 @@ mod tests {
 
         // populate the buffer into the mmap
         doca_mmap.set_memrange(mr).unwrap();
-        doca_mmap.set_permission(ffi::doca_access_flags::DOCA_ACCESS_DPU_READ_ONLY).unwrap();
+        doca_mmap.set_permission(doca_access_flags::DOCA_ACCESS_DPU_READ_ONLY.0).unwrap();
 
         doca_mmap.start().unwrap();
 

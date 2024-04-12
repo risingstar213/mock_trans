@@ -23,7 +23,7 @@ fn main() {
     let local_slice = unsafe { local_buf.get_mut_slice::<u8>(16) };
     local_slice.copy_from_slice(copy_txt.as_bytes());
 
-    conn.lock().unwrap().post_write_dma_reqs(local_buf.get_off(), remote_buf.get_off(), 32, 1234);
+    conn.lock().unwrap().post_write_dma_reqs(local_buf.get_off(), 0, 32, 1234);
 
     loop {
         let (event, error) = conn.lock().unwrap().poll_completion();
@@ -44,7 +44,7 @@ fn main() {
     let mut local_buf_dst = conn.lock().unwrap().get_local_buf(0);
     assert!(local_buf_dst.get_off() != local_buf.get_off());
 
-    conn.lock().unwrap().post_read_dma_reqs(local_buf_dst.get_off(), remote_buf.get_off(), 32, 1234);
+    conn.lock().unwrap().post_read_dma_reqs(local_buf_dst.get_off(), 0, 32, 1234);
 
     loop {
         let (event, error) = conn.lock().unwrap().poll_completion();
@@ -61,11 +61,19 @@ fn main() {
             }
         }
     }
-
+    let src_off = local_buf.get_off();
+    let dst_off = local_buf_dst.get_off();
+    let src_slice = unsafe { local_buf.get_mut_slice::<u8>(32) };
     let dst_slice = unsafe { local_buf_dst.get_mut_slice::<u8>(32) };
     /* ------- Finalize check ---------- */
     println!(
-        "[After] dst_buffer check: {}",
+        "[After] off:{}, src_buffer check: {}",
+        src_off,
+        String::from_utf8(src_slice.to_vec()).unwrap()
+    );
+    println!(
+        "[After] off:{}, dst_buffer check: {}",
+        dst_off,
         String::from_utf8(dst_slice.to_vec()).unwrap()
     );
 }

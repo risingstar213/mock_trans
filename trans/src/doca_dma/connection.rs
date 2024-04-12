@@ -88,6 +88,10 @@ impl DocaDmaControl {
         // first malloc the source buffer
         let mut src_buffer = vec![0u8; buffer_length].into_boxed_slice();
 
+        for i in 0..32 {
+            src_buffer[i] = 'a' as _;
+        }
+
         // Open device
         let device = doca::device::open_device_with_pci(pci_addr).unwrap();
 
@@ -104,7 +108,7 @@ impl DocaDmaControl {
         // populate the buffer into the mmap
         local_mmap_ref.set_memrange(src_raw).unwrap();
 
-        local_mmap_ref.set_permission(doca_access_flags::DOCA_ACCESS_DPU_READ_WRITE).unwrap();
+        local_mmap_ref.set_permission(doca_access_flags::DOCA_ACCESS_DPU_READ_WRITE.0 | doca_access_flags::DOCA_ACCESS_LOCAL_READ_WRITE.0).unwrap();
 
         local_mmap_ref.start().unwrap();
 
@@ -113,12 +117,13 @@ impl DocaDmaControl {
         let r = running.clone();
         ctrlc::set_handler(move || {
             r.store(false, std::sync::atomic::Ordering::SeqCst);
-        })
-        .expect("Error setting Ctrl-C handler");
+        }).expect("Error setting Ctrl-C handler");
 
         while running.load(std::sync::atomic::Ordering::SeqCst) {
             // Your program's code goes here
             std::thread::sleep(std::time::Duration::from_millis(1000));
+
+            println!("{}", String::from_utf8(src_buffer[0..16].to_vec()).unwrap());
         }
 
         println!("Server is down!");
@@ -148,7 +153,7 @@ impl DocaDmaConn {
 
     #[inline]
     pub fn post_read_dma_reqs(&mut self, local_offset: usize, remote_offset: usize, payload: usize, user_mark: u64) {
-        self.dma_job.set_local_data(local_offset, payload);
+        self.dma_job.set_local_data(local_offset, 0);
         self.dma_job.set_remote_data(remote_offset, payload);
         self.dma_job.set_user_data_write(user_mark, false);
 
@@ -161,7 +166,7 @@ impl DocaDmaConn {
     #[inline]
     pub fn post_write_dma_reqs(&mut self, local_offset: usize, remote_offset: usize, payload: usize, user_mark: u64) {
         self.dma_job.set_local_data(local_offset, payload);
-        self.dma_job.set_remote_data(remote_offset, payload);
+        self.dma_job.set_remote_data(remote_offset, 0);
         self.dma_job.set_user_data_write(user_mark, true);
 
         Arc::get_mut(&mut self.workq)
