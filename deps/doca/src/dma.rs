@@ -204,7 +204,7 @@ impl DOCADMAReusableJob {
     #[inline]
     pub fn set_local_data(&mut self, offset: usize, payload: usize) {
         if let Some(f) = self.local_buf.as_mut() {
-            unsafe { f.set_data(offset, payload).expect("doca fail to set src data!") };
+            unsafe { f.set_data(offset, payload).expect("doca fail to set local data!") };
         }
     }
 
@@ -212,7 +212,7 @@ impl DOCADMAReusableJob {
     #[inline]
     pub fn set_remote_data(&mut self, offset: usize, payload: usize) {
         if let Some(f) = self.remote_buf.as_mut() {
-            unsafe { f.set_data(offset, payload).expect("doca fail to set dst data!") };
+            unsafe { f.set_data(offset, payload).expect("doca fail to set remote data!") };
        }
     }
 

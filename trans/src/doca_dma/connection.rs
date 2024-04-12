@@ -104,7 +104,7 @@ impl DocaDmaControl {
         // populate the buffer into the mmap
         local_mmap_ref.set_memrange(src_raw).unwrap();
 
-        local_mmap_ref.set_permission(doca_access_flags::DOCA_ACCESS_DPU_READ_ONLY).unwrap();
+        local_mmap_ref.set_permission(doca_access_flags::DOCA_ACCESS_DPU_READ_WRITE).unwrap();
 
         local_mmap_ref.start().unwrap();
 
