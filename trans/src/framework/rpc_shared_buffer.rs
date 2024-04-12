@@ -1,9 +1,9 @@
 use std::alloc::Layout;
 use std::sync::Arc;
 
-use ll_alloc::LockedHeap;
+use crate::rdma::RdmaBaseAllocator;
 
-use crate::{MAX_INFLIGHT_REPLY, MAX_INFLIGHT_REQS, MAX_REQ_SIZE, MAX_RESP_SIZE};
+use crate::{MAX_INFLIGHT_REPLY, MAX_INFLIGHT_REQS_PER_ROUTINE, MAX_REQ_SIZE, MAX_RESP_SIZE};
 
 // reused buffer for rpc
 pub struct RpcBufAllocator {
@@ -14,7 +14,7 @@ pub struct RpcBufAllocator {
 }
 
 impl RpcBufAllocator {
-    pub fn new(coroutine_num: u32, allocator: &Arc<LockedHeap>) -> Self {
+    pub fn new(coroutine_num: u32, allocator: &Arc<RdmaBaseAllocator>) -> Self {
         let mut req_bufs = Vec::new();
         let mut req_heads = Vec::new();
         let mut reply_bufs = Vec::new();
@@ -26,7 +26,7 @@ impl RpcBufAllocator {
 
         for _ in 0..coroutine_num {
             let mut reqs = Vec::new();
-            for _ in 0..MAX_INFLIGHT_REQS {
+            for _ in 0..MAX_INFLIGHT_REQS_PER_ROUTINE {
                 let req_addr = unsafe { allocator.alloc(req_layout) };
                 reqs.push(req_addr);
             }
@@ -63,7 +63,7 @@ impl RpcBufAllocator {
     pub fn get_req_buf(&mut self, cid: u32) -> *mut u8 {
         let buf = self.req_buf_pool[cid as usize][self.req_heads[cid as usize] as usize];
         self.req_heads[cid as usize] += 1;
-        if self.req_heads[cid as usize] >= MAX_INFLIGHT_REQS as u32 {
+        if self.req_heads[cid as usize] >= MAX_INFLIGHT_REQS_PER_ROUTINE as u32 {
             self.req_heads[cid as usize] = 0;
         }
 

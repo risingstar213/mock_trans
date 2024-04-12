@@ -37,10 +37,17 @@ const WRID_RESERVE_BITS: usize = 8;
 
 // RPCs
 const MAX_INFLIGHT_REPLY: usize = 32;
-const MAX_INFLIGHT_REQS: usize = 32;
+const MAX_INFLIGHT_REQS_PER_ROUTINE: usize = 32;
 const MAX_REQ_SIZE: usize = 128;
 const MAX_RESP_SIZE: usize = 1024;
 
 /////////////////// MemStore //////////////////////////
 const ROBINHOOD_SIZE:    usize = 2048;
 const ROBINHOOD_DIB_MAX: usize = 8;
+
+
+/////////////////// DOCA DMA //////////////////////////
+const DOCA_WORKQ_DEPTH: usize = 8;
+const MAX_DMA_BUF_SIZE: usize = 1024;
+const MAX_DMA_BUF_REMOTE: usize = 64;
+const MAX_DMA_BUF_PER_ROUTINE: usize = 4;

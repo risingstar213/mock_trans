@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use std::sync::{Mutex, RwLock};
 
-use ll_alloc::LockedHeap;
-
+use crate::rdma::RdmaBaseAllocator;
 use crate::rdma::rcconn::RdmaRcConn;
 use crate::rdma::RdmaRecvCallback;
 // use crate::rdma::one_side::OneSideComm;
@@ -63,7 +62,7 @@ unsafe impl<'sched> Send for AsyncScheduler<'sched> {}
 unsafe impl<'sched> Sync for AsyncScheduler<'sched> {}
 
 impl<'sched> AsyncScheduler<'sched> {
-    pub fn new(routine_num: u32, allocator: &Arc<LockedHeap>) -> Self {
+    pub fn new(routine_num: u32, allocator: &Arc<RdmaBaseAllocator>) -> Self {
         let mut pendings = Vec::new();
         for _ in 0..routine_num {
             pendings.push(0);

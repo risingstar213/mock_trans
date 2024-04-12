@@ -13,6 +13,43 @@ use super::rcconn::RdmaRcConn;
 
 use crate::{TransError, TransResult, MAX_RECV_SIZE, MAX_SEND_SIZE, NPAGES, PEERNUMS, PORTS};
 
+pub struct RdmaBaseAllocator {
+    allocator: LockedHeap,
+    lm: *mut u8
+}
+
+impl RdmaBaseAllocator {
+    pub fn new() -> Self {
+        let mr_length = 4096 * NPAGES as usize;
+        let lm = unsafe { memalign(4096, mr_length) };
+        let allocator = unsafe { LockedHeap::new(lm as _, (NPAGES * 4096) as usize) };
+        Self {
+            allocator: allocator,
+            lm: lm as _
+        }
+    }
+
+    fn get_lm(&self) -> *mut u8 {
+        self.lm
+    }
+
+    #[inline]
+    pub unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        self.allocator.alloc(layout)
+    }
+
+    #[inline]
+    pub unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        self.allocator.dealloc(ptr, layout);
+    }
+}
+
+impl Drop for RdmaBaseAllocator {
+    fn drop(&mut self) {
+        unsafe { free(self.lm as _); }
+    }
+}
+
 #[derive(Clone, Copy, Debug)]
 struct RemoteMeta {
     peer_id: u64,
@@ -22,23 +59,19 @@ struct RemoteMeta {
 
 pub struct RdmaControl<'control> {
     self_id: u64,
-    listen_fd: *mut rdma_cm_id,
+    listen_fd: Option<*mut rdma_cm_id>,
     connections: HashMap<u64, Arc<Mutex<RdmaRcConn<'control>>>>,
-    lm: *mut u8,
-    allocator: Arc<LockedHeap>,
+    allocator: Arc<RdmaBaseAllocator>,
 }
 
 impl<'control> RdmaControl<'control> {
     pub fn new(self_id: u64) -> Self {
-        let mr_length = 4096 * NPAGES as usize;
-        let lm = unsafe { memalign(4096, mr_length) };
-        let allocator = Arc::new(unsafe { LockedHeap::new(lm as _, (NPAGES * 4096) as usize) });
+        let allocator = Arc::new(RdmaBaseAllocator::new());
 
         Self {
             self_id: self_id,
-            listen_fd: std::ptr::null_mut(),
+            listen_fd: None,
             connections: HashMap::new(),
-            lm: lm as *mut u8,
             allocator: allocator,
         }
     }
@@ -95,7 +128,7 @@ impl<'control> RdmaControl<'control> {
             }
         }
 
-        self.listen_fd = listen_id;
+        self.listen_fd = Some(listen_id);
     }
 
     pub fn connect(&mut self, peer_id: u64, ip: &str, port: &str) -> TransResult<()> {
@@ -125,7 +158,7 @@ impl<'control> RdmaControl<'control> {
         // let mr_length = 4096 * NPAGES as usize;
         // let lm = unsafe { memalign(4096, mr_length) };
         let mr_length = 4096 * NPAGES as usize;
-        let lm = self.lm as _;
+        let lm = self.allocator.get_lm() as _;
         let access = ibv_access_flags::IBV_ACCESS_LOCAL_WRITE.0
             | ibv_access_flags::IBV_ACCESS_REMOTE_READ.0
             | ibv_access_flags::IBV_ACCESS_REMOTE_WRITE.0;
@@ -230,8 +263,11 @@ impl<'control> RdmaControl<'control> {
     }
 
     fn accept(&mut self) {
+        if self.listen_fd.is_none() {
+            return;
+        }
         let mut id: *mut rdma_cm_id = std::ptr::null_mut();
-        let mut ret = unsafe { rdma_get_request(self.listen_fd, &mut id) };
+        let mut ret = unsafe { rdma_get_request(self.listen_fd.unwrap(), &mut id) };
         if ret != 0 {
             println!("rdma_get_request");
             return;
@@ -253,7 +289,7 @@ impl<'control> RdmaControl<'control> {
         // let mr_length = 4096 * NPAGES as usize;
         // let lm = unsafe { memalign(4096, mr_length) };
         let mr_length = 4096 * NPAGES as usize;
-        let lm = self.lm as _;
+        let lm = self.allocator.get_lm() as _;
         let access = ibv_access_flags::IBV_ACCESS_LOCAL_WRITE.0
             | ibv_access_flags::IBV_ACCESS_REMOTE_READ.0
             | ibv_access_flags::IBV_ACCESS_REMOTE_WRITE.0;
@@ -354,15 +390,8 @@ impl<'control> RdmaControl<'control> {
         }
     }
 
-    pub fn get_allocator(&self) -> Arc<LockedHeap> {
+    pub fn get_allocator(&self) -> Arc<RdmaBaseAllocator> {
         return self.allocator.clone();
     }
 }
 
-impl<'control> Drop for RdmaControl<'control> {
-    fn drop(&mut self) {
-        unsafe {
-            free(self.lm as *mut _);
-        }
-    }
-}

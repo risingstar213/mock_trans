@@ -2,6 +2,9 @@ pub mod control;
 pub mod one_side;
 pub mod rcconn;
 pub mod two_sides;
+
+pub use control::RdmaBaseAllocator;
+
 use lazy_static::lazy_static;
 use rcconn::RdmaRcConn;
 use std::sync::Arc;

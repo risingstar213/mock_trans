@@ -17,14 +17,17 @@ use super::super::occ::LockContent;
 pub mod occ_rpc_id {
     pub type Type = u32;
     #[allow(unused)]
-    pub const IGNORE_RPC:     Type = 0;
-    pub const READ_RPC:       Type = 1;
-    pub const FETCHWRITE_RPC: Type = 2;
-    pub const LOCK_RPC:       Type = 3;
-    pub const VALIDATE_RPC:   Type = 4;
-    pub const COMMIT_RPC:     Type = 5;
-    pub const RELEASE_RPC:    Type = 6;
-    pub const ABORT_RPC:      Type = 7;
+    pub const IGNORE_RPC:      Type = 0;
+    pub const READ_RPC:        Type = 1;
+    pub const FETCHWRITE_RPC:  Type = 2;
+    pub const LOCK_RPC:        Type = 3;
+    pub const VALIDATE_RPC:    Type = 4;
+    pub const COMMIT_RPC:      Type = 5;
+    pub const RELEASE_RPC:     Type = 6;
+    pub const ABORT_RPC:       Type = 7;
+    pub const READ_CACHE_RPC:  Type = 8;
+    pub const VAL_CACHE_RPC:   Type = 9;
+    pub const COMMIT_LAZY_RPC: Type = 10;
 }
 
 #[repr(C)]
@@ -95,6 +98,23 @@ pub struct AbortReqItem {
     pub(crate) table_id: usize,
     pub(crate) key:      u64,
     pub(crate) insert:   bool,
+}
+
+// for dpu use
+#[repr(C)]
+#[derive(Clone)]
+pub struct DmaReadSetItem {
+    pub(crate) table_id: usize,
+    pub(crate) key:      u64,
+    pub(crate) old_seq:  u64,
+}
+
+// For write
+#[repr(C)]
+#[derive(Clone)]
+pub struct DmaWriteSetItem {
+    pub(crate) table_id: usize,
+    pub(crate) key:      u64,
 }
 
 pub struct BatchRpcProc<'worker> {
@@ -438,5 +458,24 @@ impl<'worker> BatchRpcProc<'worker> {
             meta.peer_id, 
             meta.peer_tid
         );
+    }
+
+    pub fn read_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
+        let resp_buf = self.scheduler.get_reply_buf();
+
+        let req_header = req_wrapper.get_header();
+
+        let lock_content = LockContent::new(meta.peer_id, meta.rpc_cid);
+
+        for i in 0..req_header.num {
+            
+        }
     }
 }

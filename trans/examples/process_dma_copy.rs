@@ -6,91 +6,64 @@ use std::sync::Arc;
 use trans::doca_dma::process_helpers::{ recv_doca_config, load_doca_config };
 use trans::doca_dma::config::{ DocaConnInfo };
 
+use trans::doca_dma::connection::DocaDmaControl;
+
 fn main() {
 
-    let pci_addr = "af:00.0";
+    let mut control = DocaDmaControl::new();
+    control.listen_on("af:00.0", "0.0.0.0:7473".parse().unwrap(), 1);
 
-    let doca_conn = recv_doca_config("0.0.0.0:7473".parse().unwrap());
-    let remote_config = load_doca_config(0, &doca_conn).unwrap();
+    let copy_txt = "testtesttesttest";
 
-    println!(
-        "Check export len {}, remote len {}, remote addr {:?}",
-        remote_config.export_desc.payload,
-        remote_config.remote_addr.payload,
-        remote_config.remote_addr.inner.as_ptr()
-    );
+    let mut conn = control.get_conn().unwrap();
 
-    // Allocate the local buffer to store the transferred data
-    #[allow(unused_mut)]
-    let mut dpu_buffer = vec![0u8; remote_config.remote_addr.payload].into_boxed_slice();
+    let remote_buf = Arc::get_mut(&mut conn).unwrap().alloc_remote_buf();
 
-    /* ********** The main test body ********** */
+    let mut local_buf = Arc::get_mut(&mut conn).unwrap().get_local_buf(0);
+    let local_slice = unsafe { local_buf.get_mut_slice::<u8>(64) };
+    local_slice.copy_from_slice(copy_txt.as_bytes());
 
-    // Create a DMA_ENGINE;
-    let device = crate::open_device_with_pci(pci_addr).unwrap();
-
-    let dma = DMAEngine::new().unwrap();
-
-    let ctx = DOCAContext::new(&dma, vec![device.clone()]).unwrap();
-
-    let mut workq = DOCAWorkQueue::new(1, &ctx).unwrap();
-
-    let mut doca_mmap = Arc::new(DOCAMmap::new().unwrap());
-    Arc::get_mut(&mut doca_mmap)
-        .unwrap()
-        .add_device(&device)
-        .unwrap();
-
-    // Create the remote mmap
-    #[allow(unused_mut)]
-    let mut remote_mmap =
-        Arc::new(DOCAMmap::new_from_export(remote_config.export_desc, &device).unwrap());
-
-    let inv = BufferInventory::new(1024).unwrap();
-    let mut dma_src_buf =
-        Arc::new(DOCARegisteredMemory::new_from_remote(&remote_mmap, remote_config.remote_addr)
-            .unwrap()
-            .to_buffer(&inv)
-            .unwrap());
-    unsafe {
-        Arc::get_mut(&mut dma_src_buf)
-            .unwrap()
-            .set_data(0, remote_config.remote_addr.payload)
-            .unwrap()
-    };
-
-    let dma_dst_buf =
-        Arc::new(DOCARegisteredMemory::new(&doca_mmap, unsafe { RawPointer::from_box(&dpu_buffer) })
-            .unwrap()
-            .to_buffer(&inv)
-            .unwrap());
-
-    doca_mmap.start().unwrap();
-
-    /* Start to submit the DMA job!  */
-    let job = workq.create_dma_job(&dma_src_buf, &dma_dst_buf);
-    workq.submit(&job).expect("failed to submit the job");
+    Arc::get_mut(&mut conn).unwrap().post_write_dma_reqs(local_buf.get_off(), remote_buf.get_off(), 64, 1234);
 
     loop {
-        let event = workq.poll_completion();
-        match event {
-            Ok(_e) => {
-                println!("Job finished!");
-                break;
-            }
-            Err(e) => {
-                if e == DOCAError::DOCA_ERROR_AGAIN {
-                    continue;
-                } else {
-                    panic!("Job failed! {:?}", e);
-                }
+        let (event, error) = Arc::get_mut(&mut conn).unwrap().poll_completion();
+
+        if error == DOCAError::DOCA_SUCCESS {
+            println!("Job finished!");
+            break;
+        } else {
+            if error == DOCAError::DOCA_ERROR_AGAIN {
+                continue;
+            } else {
+                panic!("Job failed!");
             }
         }
     }
 
+    let mut local_buf_dst = Arc::get_mut(&mut conn).unwrap().get_local_buf(0);
+    assert!(local_buf_dst.get_off() != local_buf.get_off());
+
+    Arc::get_mut(&mut conn).unwrap().post_read_dma_reqs(remote_buf.get_off(), local_buf_dst.get_off(), 64, 1234);
+
+    loop {
+        let (event, error) = Arc::get_mut(&mut conn).unwrap().poll_completion();
+
+        if error == DOCAError::DOCA_SUCCESS {
+            println!("Job finished!");
+            break;
+        } else {
+            if error == DOCAError::DOCA_ERROR_AGAIN {
+                continue;
+            } else {
+                panic!("Job failed!");
+            }
+        }
+    }
+
+    let dst_slice = unsafe { local_buf_dst.get_mut_slice::<u8>(64) };
     /* ------- Finalize check ---------- */
     println!(
         "[After] dst_buffer check: {}",
-        String::from_utf8(dpu_buffer.to_vec()).unwrap()
+        String::from_utf8(dst_slice.to_vec()).unwrap()
     );
 }

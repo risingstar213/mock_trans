@@ -9,6 +9,7 @@ use rdma_sys::*;
 use super::{one_side::OneSideComm, two_sides::TwoSidesComm};
 use super::{RdmaRecvCallback, RdmaSendCallback};
 use super::{DEFAULT_RDMA_RECV_HANDLER, DEFAULT_RDMA_SEND_HANDLER};
+use super::control::RdmaBaseAllocator;
 use crate::*;
 
 #[allow(unused)]
@@ -57,7 +58,7 @@ impl Default for RdmaElement {
 pub struct RdmaRcConn<'conn> {
     conn_id: u64,
     meta: RdmaRcMeta,
-    allocator: Arc<LockedHeap>,
+    allocator: Arc<RdmaBaseAllocator>,
     elements: RdmaElement,
     rwcs: [ibv_wc; MAX_RECV_SIZE],
     rhandler: Weak<dyn RdmaRecvCallback + Send + Sync + 'conn>,
@@ -76,7 +77,7 @@ impl<'conn> RdmaRcConn<'conn> {
         lmr: *mut ibv_mr,
         raddr: u64,
         rid: u32,
-        allocator: &Arc<LockedHeap>,
+        allocator: &Arc<RdmaBaseAllocator>,
     ) -> Self {
         let meta = RdmaRcMeta {
             conn_id: id,
