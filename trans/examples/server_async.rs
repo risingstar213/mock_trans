@@ -1,3 +1,4 @@
+#![feature(get_mut_unchecked)]
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -111,19 +112,23 @@ async fn main() {
     rdma.listen_task();
 
     let allocator = rdma.get_allocator();
-    let scheduler = Arc::new(AsyncScheduler::new(1, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new(1, &allocator));
 
     let conn = rdma.get_connection(0);
     conn.lock().unwrap().init_and_start_recvs().unwrap();
 
-    scheduler.append_conn(0, &conn);
+    unsafe {
+        Arc::get_mut_unchecked(&mut scheduler).append_conn(0, &conn);
+    }
     conn.lock()
         .unwrap()
         .register_recv_callback(&scheduler)
         .unwrap();
 
     let worker = Arc::new(AnswerClientWorker::new(&scheduler));
-    scheduler.register_callback(&worker);
+    unsafe {
+        Arc::get_mut_unchecked(&mut scheduler).register_callback(&worker);
+    }
 
     {
         let worker0 = worker.clone();

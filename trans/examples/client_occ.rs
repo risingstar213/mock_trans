@@ -1,7 +1,7 @@
+#![feature(get_mut_unchecked)]
 use std::sync::Arc;
 
 use trans::rdma::control::RdmaControl;
-use trans::rdma::rcconn::RdmaRcConn;
 
 use trans::memstore::memdb::{MemDB, TableSchema};
 use trans::memstore::{MemStoreValue, RobinhoodMemStore};
@@ -167,12 +167,15 @@ async fn main() {
     rdma.connect(1, "10.10.10.6\0", "7472\0").unwrap();
 
     let allocator = rdma.get_allocator();
-    let scheduler = Arc::new(AsyncScheduler::new(3, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new(3, &allocator));
 
     let conn = rdma.get_connection(1);
     conn.lock().unwrap().init_and_start_recvs().unwrap();
 
-    scheduler.append_conn(1, &conn);
+    unsafe {
+        Arc::get_mut_unchecked(&mut scheduler).append_conn(1, &conn);
+    }
+
     conn.lock()
         .unwrap()
         .register_recv_callback(&scheduler)

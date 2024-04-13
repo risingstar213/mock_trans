@@ -51,6 +51,13 @@ impl DOCAEvent {
             res
         }
     }
+
+    /// Get the user mark
+    pub fn user_mark(&self) -> u64 {
+        unsafe {
+            self.inner.user_data.u64_
+        }
+    }
 }
 
 /// a logical representation of DOCA thread of execution (non-thread-safe).

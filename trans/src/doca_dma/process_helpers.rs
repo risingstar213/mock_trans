@@ -5,17 +5,10 @@
  * 
  */
 
-use libc::free;
-
-use std::io::Read;
-use std::sync::Arc;
-use std::ptr::{ NonNull, null_mut };
+use std::ptr::NonNull;
 use std::net::SocketAddr;
 
-use doca::context::work_queue;
-use doca::{open_device_with_pci, DOCAEvent};
-use doca::dma::{ DOCAContext, DOCADMAJob };
-use doca::{ DOCAError, RawPointer, RawPointerMsg, DOCAResult, LoadedInfo, DOCABuffer, DOCARegisteredMemory, DOCAMmap, BufferInventory, DOCAWorkQueue, DMAEngine };
+use doca::{ RawPointer, DOCAResult, LoadedInfo };
 
 use crate::common::connection::recv_config;
 

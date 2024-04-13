@@ -5,16 +5,11 @@
  * 
  */
 
-use std::sync::atomic::{ compiler_fence, Ordering };
 use std::slice;
-use std::net::{ SocketAddr, TcpStream };
-use std::io::Write;
-use std::time::Duration;
-use std::ptr::{ NonNull, null_mut };
+use std::net::SocketAddr;
 use std::sync::Arc;
 
-use doca::dma::DOCAContext;
-use doca::{ DOCAMmap, DOCARegisteredMemory, BufferInventory, DOCAWorkQueue, DMAEngine, RawPointer, RawPointerMsg };
+use doca::{ DOCAMmap, RawPointer, };
 
 use crate::common::connection::send_config;
 use super::config::{ DocaConnInfo, DocaConnInfoMsg };

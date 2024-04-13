@@ -6,8 +6,8 @@ use std::sync::{ Arc, Mutex };
 use std::ptr::NonNull;
 
 use doca::{open_device_with_pci, DOCAEvent};
-use doca::dma::{ DOCAContext, DOCADMAJob };
-use doca::{ DOCAError, RawPointer, RawPointerMsg, DOCAResult, LoadedInfo, DOCABuffer, DOCARegisteredMemory, DOCAMmap, BufferInventory, DOCAWorkQueue, DMAEngine };
+use doca::dma::DOCAContext;
+use doca::{ RawPointer, DOCABuffer, DOCARegisteredMemory, DOCAMmap, BufferInventory, DOCAWorkQueue, DMAEngine };
 use doca_sys::doca_error;
 use doca_sys::doca_access_flags;
 
@@ -98,7 +98,7 @@ impl DocaDmaControl {
         let mut local_mmap = Arc::new(DOCAMmap::new().unwrap());
         let local_mmap_ref = Arc::get_mut(&mut local_mmap).unwrap();
 
-        let dev_idx = local_mmap_ref.add_device(&device).unwrap();
+        let _ = local_mmap_ref.add_device(&device).unwrap();
 
         let src_raw = RawPointer {
             inner: NonNull::new(src_buffer.as_mut_ptr() as *mut _).unwrap(),

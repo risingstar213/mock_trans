@@ -1,7 +1,6 @@
-// use std::alloc::Layout;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
-use std::sync::{Mutex, RwLock};
+use std::sync::Mutex;
 
 use crate::rdma::RdmaBaseAllocator;
 use crate::rdma::rcconn::RdmaRcConn;
@@ -9,7 +8,12 @@ use crate::rdma::RdmaRecvCallback;
 // use crate::rdma::one_side::OneSideComm;
 use crate::rdma::two_sides::TwoSidesComm;
 use crate::rdma::RdmaSendCallback;
-// use crate::{MAX_REQ_SIZE, MAX_RESP_SIZE};
+
+#[cfg(feature = "doca_deps")]
+use doca::DOCAError;
+
+#[cfg(feature = "doca_deps")]
+use crate::doca_dma::connection::DocaDmaConn;
 
 use super::rpc_shared_buffer::RpcBufAllocator;
 
@@ -22,7 +26,7 @@ use super::rpc::{AsyncRpc, RpcProcessMeta};
 // process send / read / write saparately
 // because send does not require polling but read / write need
 
-pub struct ReplyMeta {
+struct ReplyMeta {
     reply_bufs: Vec<*mut u8>,
     reply_counts: Vec<u32>,
 }
@@ -43,9 +47,20 @@ impl ReplyMeta {
     }
 }
 
+#[cfg(feature = "doca_deps")]
+#[derive(Clone, Copy)]
+enum DmaStatus {
+    DmaIdle,
+    DmaWaiting,
+    DmaError,
+}
+
+#[cfg(feature = "doca_deps")]
+struct DmaMeta(DmaStatus);
+
 pub struct AsyncScheduler<'sched> {
     allocator: Mutex<RpcBufAllocator>,
-    conns: RwLock<HashMap<u64, Arc<Mutex<RdmaRcConn<'sched>>>>>,
+    conns: HashMap<u64, Arc<Mutex<RdmaRcConn<'sched>>>>,
     //  read / write (one-side primitives)
     // pending for coroutines
     pendings: Mutex<Vec<u32>>,
@@ -54,7 +69,12 @@ pub struct AsyncScheduler<'sched> {
     reply_metas: Mutex<ReplyMeta>,
 
     // callbacks
-    callback: RwLock<Weak<dyn RpcHandler + Send + Sync + 'sched>>,
+    callback: Weak<dyn RpcHandler + Send + Sync + 'sched>,
+
+    #[cfg(feature = "doca_deps")]
+    dma_conn: Option<Arc<Mutex<DocaDmaConn>>>,
+    #[cfg(feature = "doca_deps")]
+    dma_meta: Mutex<Vec<DmaMeta>>,
 }
 
 // 手动标记 Send + Sync
@@ -64,31 +84,39 @@ unsafe impl<'sched> Sync for AsyncScheduler<'sched> {}
 impl<'sched> AsyncScheduler<'sched> {
     pub fn new(routine_num: u32, allocator: &Arc<RdmaBaseAllocator>) -> Self {
         let mut pendings = Vec::new();
+        #[cfg(feature = "doca_deps")]
+        let mut dma_meta = Vec::new();
         for _ in 0..routine_num {
             pendings.push(0);
+            #[cfg(feature = "doca_deps")]
+            dma_meta.push(DmaMeta(DmaStatus::DmaIdle));
         }
         Self {
             allocator: Mutex::new(RpcBufAllocator::new(routine_num, allocator)),
-            conns: RwLock::new(HashMap::new()),
+            conns: HashMap::new(),
             pendings: Mutex::new(pendings),
             reply_metas: Mutex::new(ReplyMeta::new(routine_num)),
 
             // callbacks
-            callback: RwLock::new(Arc::downgrade(&DEFAULT_RPC_HANDLER) as _),
+            callback: Arc::downgrade(&DEFAULT_RPC_HANDLER) as _,
+
+            #[cfg(feature = "doca_deps")]
+            dma_conn: None,
+            #[cfg(feature = "doca_deps")]
+            dma_meta: Mutex::new(dma_meta),
         }
     }
 
-    pub fn append_conn(&self, id: u64, conn: &Arc<Mutex<RdmaRcConn<'sched>>>) {
-        self.conns.write().unwrap().insert(id, conn.clone());
+    pub fn append_conn(&mut self, id: u64, conn: &Arc<Mutex<RdmaRcConn<'sched>>>) {
+        self.conns.insert(id, conn.clone());
     }
 
-    pub fn register_callback(&self, callback: &Arc<impl RpcHandler + Send + Sync + 'sched>) {
-        *self.callback.write().unwrap() = Arc::downgrade(callback) as _;
+    pub fn register_callback(&mut self, callback: &Arc<impl RpcHandler + Send + Sync + 'sched>) {
+        self.callback = Arc::downgrade(callback) as _;
     }
 
     pub fn poll_sends(&self) {
-        let guard = self.conns.read().unwrap();
-        for (_, conn) in guard.iter() {
+        for (_, conn) in self.conns.iter() {
             conn.lock().unwrap().poll_send();
         }
     }
@@ -106,12 +134,11 @@ impl<'sched> RdmaSendCallback for AsyncScheduler<'sched> {
 impl<'sched> AsyncScheduler<'sched> {
     pub fn poll_recvs(&self) {
         // let mut pendings = self.pendings.lock().unwrap();
-        let guard = self.conns.read().unwrap();
-        for (_, conn) in guard.iter() {
+        for (_, conn) in self.conns.iter() {
             conn.lock().unwrap().poll_recvs();
         }
 
-        for (_, conn) in guard.iter() {
+        for (_, conn) in self.conns.iter() {
             conn.lock().unwrap().flush_pending().unwrap();
         }
     }
@@ -133,20 +160,8 @@ impl<'sched> AsyncScheduler<'sched> {
         }
     }
 
-    // pub fn free_reply_buf(&self, addr: *mut u8, size: usize) {
-    //     let layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::align_of::<usize>()).unwrap();
-    //     // unsafe { self.allocator.alloc(layout) }
-    //     unsafe { self.allocator.dealloc(addr.sub(4), layout) };
-    // }
-
-    // pub fn free_req_buf(&self, addr: *mut u8, size: usize) {
-    //     let layout = Layout::from_size_align(MAX_REQ_SIZE, std::mem::align_of::<usize>()).unwrap();
-    //     unsafe { self.allocator.dealloc(addr.sub(4), layout) };
-    // }
-
     pub fn flush_pending(&self) {
-        let guard = self.conns.read().unwrap();
-        for (_, conn) in guard.iter() {
+        for (_, conn) in self.conns.iter() {
             conn.lock().unwrap().flush_pending().unwrap();
         }
     }
@@ -161,7 +176,7 @@ impl<'sched> RdmaRecvCallback for AsyncScheduler<'sched> {
             rpc_msg_type::REQ => {
                 let callback = &self.callback;
                 let process_meta = RpcProcessMeta::new(meta.rpc_cid, src_conn.get_conn_id(), 0);
-                callback.read().unwrap().upgrade().unwrap().rpc_handler(
+                callback.upgrade().unwrap().rpc_handler(
                     src_conn,
                     meta.rpc_id,
                     unsafe { msg.add(4) },
@@ -243,8 +258,7 @@ impl<'sched> AsyncRpc for AsyncScheduler<'sched> {
         // todo!();
         Self::prepare_msg_header(msg, rpc_id, rpc_size, rpc_cid, rpc_type);
 
-        let guard = self.conns.read().unwrap();
-        let conn = guard.get(&peer_id).unwrap();
+        let conn = self.conns.get(&peer_id).unwrap();
         conn.lock()
             .unwrap()
             .send_pending(unsafe { msg.sub(4) as _ }, rpc_size + 4)
@@ -265,11 +279,93 @@ impl<'sched> AsyncRpc for AsyncScheduler<'sched> {
         // todo!();
         Self::prepare_msg_header(msg, rpc_id, rpc_size, rpc_cid, rpc_type);
 
-        let guard = self.conns.read().unwrap();
-        let conn = guard.get(&peer_id).unwrap();
+        let conn =  self.conns.get(&peer_id).unwrap();
         conn.lock()
             .unwrap()
             .send_one(unsafe { msg.sub(4) as _ }, rpc_size + 4);
+    }
+}
+
+// for doca dma
+#[cfg(feature = "doca_deps")]
+impl<'sched> AsyncScheduler<'sched> {
+    pub fn set_dma_conn(&mut self, dma_conn: &Arc<Mutex<DocaDmaConn>>) {
+        self.dma_conn = Some(dma_conn.clone());
+    }
+
+    #[inline]
+    pub fn post_read_dma_req(&self, local_offset: usize, remote_offset: usize, payload: usize, cid: u32) {
+        self.dma_conn
+            .as_ref()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .post_read_dma_reqs(local_offset, remote_offset, payload, cid as _);
+
+        if let Some(status) = self.dma_meta.lock().unwrap().get_mut::<usize>(cid as _) {
+            status.0 = DmaStatus::DmaWaiting;
+        }
+    }
+
+    #[inline]
+    pub fn post_write_dma_req(&self, local_offset: usize, remote_offset: usize, payload: usize, cid: u32) {
+        self.dma_conn
+            .as_ref()
+            .unwrap()
+            .lock()
+            .unwrap()
+            .post_write_dma_reqs(local_offset, remote_offset, payload, cid as _);
+
+            if let Some(status) = self.dma_meta.lock().unwrap().get_mut::<usize>(cid as _) {
+                status.0 = DmaStatus::DmaWaiting;
+            }
+    }
+
+    #[inline]
+    pub fn poll_dma_comps(&self) {
+        let mut dma_conn = self.dma_conn
+            .as_ref()
+            .unwrap()
+            .lock()
+            .unwrap();
+
+        loop {
+            let (event, error) = dma_conn.poll_completion();
+            match error {
+                DOCAError::DOCA_SUCCESS => {
+                    let cid: usize = event.user_mark() as _;
+                    if let Some(status) = self.dma_meta.lock().unwrap().get_mut::<usize>(cid) {
+                        status.0 = DmaStatus::DmaIdle;
+                    }
+                }
+                DOCAError::DOCA_ERROR_AGAIN => {
+                    break;
+                }
+                _ => {
+                    let cid: usize = event.user_mark() as _;
+                    if let Some(status) = self.dma_meta.lock().unwrap().get_mut::<usize>(cid) {
+                        status.0 = DmaStatus::DmaError;
+                    }
+                }
+            }
+        }
+    }
+
+    pub async fn yield_until_dma_ready(&self, cid: u32) -> Result<(), ()> {
+        loop {
+            let status = self.dma_meta.lock().unwrap().get::<usize>(cid as _).unwrap().0;
+            match status {
+                DmaStatus::DmaIdle => {
+                    return Ok(());
+                }
+                DmaStatus::DmaError => {
+                    return Err(());
+                }
+                DmaStatus::DmaWaiting => {
+                    self.yield_now(cid).await;
+                }
+            }
+        }
     }
 }
 

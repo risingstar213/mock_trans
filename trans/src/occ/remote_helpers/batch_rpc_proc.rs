@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
+use tokio::sync::mpsc;
+use tokio::sync::Mutex as AsyncMutex;
+
 use crate::framework::scheduler::AsyncScheduler;
 use crate::framework::rpc::*;
 use crate::memstore::memdb::MemDB;
 use crate::rdma::rcconn::RdmaRcConn;
 use crate::MAX_RESP_SIZE;
 
-use super::BatchRpcReqHeader;
 use super::BatchRpcRespHeader;
 use super::BatchRpcReduceResp;
 
@@ -100,26 +102,17 @@ pub struct AbortReqItem {
     pub(crate) insert:   bool,
 }
 
-// for dpu use
-#[repr(C)]
-#[derive(Clone)]
-pub struct DmaReadSetItem {
-    pub(crate) table_id: usize,
-    pub(crate) key:      u64,
-    pub(crate) old_seq:  u64,
-}
 
-// For write
-#[repr(C)]
-#[derive(Clone)]
-pub struct DmaWriteSetItem {
-    pub(crate) table_id: usize,
-    pub(crate) key:      u64,
+pub struct YieldReq {
+    yield_rpc_id: occ_rpc_id::Type,
+    yield_meta:   RpcProcessMeta,
+
 }
 
 pub struct BatchRpcProc<'worker> {
     memdb:     Arc<MemDB<'worker>>,
     scheduler: Arc<AsyncScheduler<'worker>>,
+    sender:    Option<mpsc::Sender<YieldReq>>,
 }
 
 impl<'worker> BatchRpcProc<'worker> {
@@ -127,6 +120,7 @@ impl<'worker> BatchRpcProc<'worker> {
         Self {
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
+            sender: None,
         }
     }
 }
@@ -459,7 +453,10 @@ impl<'worker> BatchRpcProc<'worker> {
             meta.peer_tid
         );
     }
+}
 
+#[cfg(feature = "doca_deps")]
+impl<'worker> BatchRpcProc<'worker> {
     pub fn read_cache_rpc_handler(
         &self,
         src_conn: &mut RdmaRcConn,
@@ -478,4 +475,33 @@ impl<'worker> BatchRpcProc<'worker> {
             
         }
     }
+
+    pub fn validate_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        tokio::task::spawn(async move {
+            
+        });
+    }
+
+    // work for validate cache
+    pub async fn validate_cache_work() {
+        let (tx, mut rx) = mpsc::channel::<YieldReq>(32);
+    }
+}
+
+#[tokio::test]
+async fn test_tokio()
+{
+    let (tx, mut rx) = mpsc::channel::<YieldReq>(32);
+    let rx = AsyncMutex::new(rx);
+
+    let mut receiver = rx.lock().await;
+    let req1 = receiver.recv().await.unwrap();
+
+    let req2 = receiver.recv().await.unwrap();
 }

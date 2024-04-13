@@ -1,3 +1,4 @@
+#![feature(get_mut_unchecked)]
 use std::sync::Arc;
 use trans::occ::{BatchRpcProc, occ_rpc_id};
 
@@ -7,7 +8,6 @@ use trans::memstore::{MemStoreValue, RobinhoodMemStore};
 use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
 
-use trans::framework::rpc::AsyncRpc;
 use trans::framework::rpc::{RpcHandler, RpcProcessMeta};
 use trans::framework::scheduler::AsyncScheduler;
 use trans::framework::worker::AsyncWorker;
@@ -103,19 +103,23 @@ async fn main() {
     rdma.listen_task();
 
     let allocator = rdma.get_allocator();
-    let scheduler = Arc::new(AsyncScheduler::new(1, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new(1, &allocator));
 
     let conn = rdma.get_connection(0);
     conn.lock().unwrap().init_and_start_recvs().unwrap();
 
-    scheduler.append_conn(0, &conn);
+    unsafe {
+        Arc::get_mut_unchecked(&mut scheduler).append_conn(0, &conn);
+    }
     conn.lock()
         .unwrap()
         .register_recv_callback(&scheduler)
         .unwrap();
 
     let worker = Arc::new(OccProcWorker::new(&memdb, &scheduler));
-    scheduler.register_callback(&worker);
+    unsafe {
+        Arc::get_mut_unchecked(&mut scheduler).register_callback(&worker);
+    }
 
     {
         let worker0 = worker.clone();

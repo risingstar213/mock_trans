@@ -1,6 +1,7 @@
+
 #[repr(C)]
 #[derive(Clone)]
-pub struct DmaReadSetItem {
+pub struct CacheReadSetItem {
     pub(crate) table_id: usize,
     pub(crate) key:      u64,
     pub(crate) old_seq:  u64,
@@ -9,7 +10,7 @@ pub struct DmaReadSetItem {
 // For write
 #[repr(C)]
 #[derive(Clone)]
-pub struct DmaWriteSetItem {
+pub struct CacheWriteSetItem {
     pub(crate) table_id: usize,
     pub(crate) key:      u64,
 }

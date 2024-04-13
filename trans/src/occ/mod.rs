@@ -1,7 +1,7 @@
 mod rwset;
 mod occ;
 mod remote_helpers;
-mod dpu_helpers;
+mod cache_helpers;
 
 pub mod occ_local;
 pub mod occ_remote;
