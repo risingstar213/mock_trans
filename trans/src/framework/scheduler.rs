@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use std::sync::Mutex;
 
+use crate::doca_dma::{DmaLocalBuf, DmaRemoteBuf};
 use crate::rdma::RdmaBaseAllocator;
 use crate::rdma::rcconn::RdmaRcConn;
 use crate::rdma::RdmaRecvCallback;
@@ -366,6 +367,21 @@ impl<'sched> AsyncScheduler<'sched> {
                 }
             }
         }
+    }
+
+    #[inline]
+    pub fn dma_get_local_buf(&self, cid: u32) -> DmaLocalBuf {
+        self.dma_conn.as_ref().unwrap().lock().unwrap().get_local_buf(cid)
+    }
+
+    #[inline]
+    pub fn dma_alloc_remote_buf(&self) -> DmaRemoteBuf {
+        self.dma_conn.as_ref().unwrap().lock().unwrap().alloc_remote_buf()
+    }
+
+    #[inline]
+    pub fn dma_dealloc_remote_buf(&self, buf: DmaRemoteBuf) {
+        self.dma_conn.as_ref().unwrap().lock().unwrap().dealloc_remote_buf(buf);
     }
 }
 

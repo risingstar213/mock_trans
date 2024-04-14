@@ -7,6 +7,8 @@ pub enum RwType {
     ERASE,
 }
 
+// seq = { local_seq, node_id }
+
 pub struct RwItem<const ITEM_MAX_SIZE: usize>
 {
     pub(crate) table_id: usize,
@@ -41,10 +43,6 @@ impl<const ITEM_MAX_SIZE: usize> RwItem<ITEM_MAX_SIZE>
             seq:      seq
         }
     }
-
-    // pub fn get_value_inner<T: MemStoreValue>(&mut self) -> T {
-    //     self.value.get_inner::<T>()
-    // }
 }
 pub struct RwSet<const ITEM_MAX_SIZE: usize> 
 {

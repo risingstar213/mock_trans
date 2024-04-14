@@ -51,3 +51,6 @@ const DOCA_WORKQ_DEPTH: usize = 8;
 const MAX_DMA_BUF_SIZE: usize = 1024;
 const MAX_DMA_BUF_REMOTE: usize = 64;
 const MAX_DMA_BUF_PER_ROUTINE: usize = 64;
+
+/////////////////// CACHE /////////////////////////////
+const MAX_LOCAL_CACHE_COUNT: usize = 16;

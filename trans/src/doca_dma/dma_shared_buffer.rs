@@ -26,7 +26,14 @@ impl DmaLocalBuf {
         self.off
     }
 
-    pub unsafe fn get_mut_slice<ITEM: Clone>(&mut self, count: usize) -> &mut [ITEM] {
+    pub unsafe fn get_const_slice<ITEM: Clone>(&self, count: usize) -> &'static [ITEM] {
+        let demand = std::mem::size_of::<ITEM>() * count;
+        assert!(demand <= self.len);
+
+        std::slice::from_raw_parts::<ITEM>((self.saddr + self.off) as _, count)
+    }
+
+    pub unsafe fn get_mut_slice<ITEM: Clone>(&mut self, count: usize) -> &'static mut [ITEM] {
         let demand = std::mem::size_of::<ITEM>() * count;
         assert!(demand <= self.len);
 

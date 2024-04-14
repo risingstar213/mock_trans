@@ -101,9 +101,6 @@ impl<'worker> AsyncWorker<'worker> for AnswerClientWorker<'worker> {
     }
 }
 
-// struct AddRpc<'worker> {
-//     worker: Arc<AsyncWorker<'worker>>,
-// }
 
 #[tokio::main]
 async fn main() {
