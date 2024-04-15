@@ -57,8 +57,8 @@ fn main() {
     }
     let src_off = local_buf.get_off();
     let dst_off = local_buf_dst.get_off();
-    let src_slice = unsafe { local_buf.get_mut_slice::<u8>(32) };
-    let dst_slice = unsafe { local_buf_dst.get_mut_slice::<u8>(32) };
+    let src_slice = unsafe { local_buf.get_const_slice::<u8>(32) };
+    let dst_slice = unsafe { local_buf_dst.get_const_slice::<u8>(32) };
     /* ------- Finalize check ---------- */
     println!(
         "[After] off:{}, src_buffer check: {}",
