@@ -4,7 +4,7 @@ use std::hash::Hash;
 use std::collections::HashMap;
 
 use crate::MAX_DMA_BUF_SIZE;
-use crate::MAX_LOCAL_CACHE_COUNT;
+use crate::MAX_LOCAL_CACHE_BUF_COUNT;
 use crate::framework::rpc::RpcProcessMeta;
 use crate::framework::scheduler::AsyncScheduler;
 use crate::occ::occ::LockContent;
@@ -62,7 +62,7 @@ impl LocalCacheBufAllocator {
     pub fn alloc_buf(&mut self) -> Option<LocalCacheBuf> {
         if !self.free_bufs.is_empty() {
             return self.free_bufs.pop();
-        } else if self.alloc_num < MAX_LOCAL_CACHE_COUNT {
+        } else if self.alloc_num < MAX_LOCAL_CACHE_BUF_COUNT {
             return Some(LocalCacheBuf(Arc::pin([0u8; MAX_DMA_BUF_SIZE])));
         } else {
             return None;
@@ -80,11 +80,11 @@ enum CacheBuf {
     RemoteBuf(DmaRemoteBuf),
 }
 
-pub const fn max_read_item_count() -> usize {
+pub const fn max_read_item_count_in_buf() -> usize {
     MAX_DMA_BUF_SIZE / std::mem::size_of::<CacheReadSetItem>()
 }
 
-pub const fn max_write_item_count() -> usize {
+pub const fn max_write_item_count_in_buf() -> usize {
     MAX_DMA_BUF_SIZE / std::mem::size_of::<CacheWriteSetItem>()
 }
 
@@ -204,12 +204,50 @@ impl<'worker> TransCacheView<'worker> {
     }
 
     #[inline]
-    pub fn alloc_read_buf(&mut self, key: &TransKey) {
+    pub fn alloc_read_buf(&self, key: &TransKey) {
         let new_buf = self.scheduler.dma_alloc_remote_buf();
 
         let mut read_map = self.trans_read_map.lock().unwrap();
         let metas = read_map.get_mut(key).unwrap();
         metas.push(CacheMeta::new(CacheBuf::RemoteBuf(new_buf), 0));
+    }
+    #[inline]
+    fn get_last_read_meta(&self, key: &TransKey) -> CacheMeta {
+        let read_map = self.trans_read_map.lock().unwrap();
+        let read_vec = read_map.get(key).unwrap();
+        let idx = read_vec.len() - 1;
+        read_vec.get(idx).unwrap().clone()
+    }
+
+    #[inline]
+    async fn sync_read_buf(&self, key: &TransKey, cid: u32, dma_local_buf: &Option<DmaLocalBuf>, dirty_count: usize) {
+        let mut read_map = self.trans_read_map.lock().unwrap();
+        let read_vec = read_map.get_mut(key).unwrap();
+        let idx = read_vec.len() - 1;
+        // update count here is proper here ???
+        read_vec.get_mut(idx).unwrap().count += dirty_count;
+        let meta = read_vec.get(idx).unwrap().clone();
+        drop(read_map);
+
+        match &meta.buf {
+            CacheBuf::LocalBuf(_) => {}
+            CacheBuf::RemoteBuf(buf) => {
+                let remote_off = buf.get_off() + meta.count * std::mem::size_of::<CacheReadSetItem>();
+                let payload = dirty_count * std::mem::size_of::<CacheReadSetItem>();
+
+                loop {
+                    // sync functions can be more useful ???
+                    self.scheduler.post_write_dma_req(dma_local_buf.unwrap().get_off(), remote_off, payload, cid);
+
+                    match self.scheduler.yield_until_dma_ready(cid).await {
+                        Ok(_) => {
+                            break;
+                        }
+                        Err(_) => {}
+                    }
+                }
+            }
+        }
     }
 
     // write buf
@@ -260,24 +298,38 @@ impl<'worker> TransCacheView<'worker> {
         let metas = write_map.get_mut(key).unwrap();
         metas.push(CacheMeta::new(CacheBuf::RemoteBuf(new_buf), 0));
     }
+
+    #[inline]
+    fn alloc_dma_local_buf(&self, cid: u32) -> DmaLocalBuf {
+        self.scheduler.dma_get_local_buf(cid)
+    }
 }
 
 pub struct ReadCacheMetaWriter {
+    trans_key:     TransKey,
+    cid:           u32,
     meta:          CacheMeta,
     dma_local_buf: Option<DmaLocalBuf>,
     dirty_count:   usize,
 }
 
-impl ReadCacheMetaWriter {
-    fn new(meta: &CacheMeta) -> Self {
+impl<'worker> ReadCacheMetaWriter {
+    fn new(trans_key: &TransKey, cid: u32, meta: &CacheMeta) -> Self {
         Self {
+            trans_key: trans_key.clone(),
+            cid: cid,
             meta: meta.clone(),
             dma_local_buf: None,
             dirty_count: 0,
         }
     }
 
-    pub async fn append_item(&mut self, item: CacheReadSetItem) {
+    pub async fn append_item(&mut self, view: &Arc<TransCacheView<'worker>>, item: CacheReadSetItem) {
+        if self.meta.count + self.dirty_count >= max_read_item_count_in_buf() {
+            view.sync_read_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count).await;
+            
+            self.dirty_count = 0;
+        }
         match &mut self.meta.buf {
             CacheBuf::LocalBuf(buf) => {
                 let idx = self.dirty_count + self.meta.count;
@@ -285,7 +337,7 @@ impl ReadCacheMetaWriter {
                     buf.set_item::<CacheReadSetItem>(idx, item);
                 }
             }
-            CacheBuf::RemoteBuf(buf) => {
+            CacheBuf::RemoteBuf(_) => {
                 let idx = self.dirty_count;
                 if let Some(dma_buf) = &mut self.dma_local_buf {
                     unsafe {
@@ -294,5 +346,7 @@ impl ReadCacheMetaWriter {
                 }
             }
         }
+
+        self.dirty_count += 1;
     }
 }

@@ -53,4 +53,4 @@ const MAX_DMA_BUF_REMOTE: usize = 64;
 const MAX_DMA_BUF_PER_ROUTINE: usize = 64;
 
 /////////////////// CACHE /////////////////////////////
-const MAX_LOCAL_CACHE_COUNT: usize = 16;
+const MAX_LOCAL_CACHE_BUF_COUNT: usize = 16;
