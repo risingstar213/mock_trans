@@ -86,7 +86,7 @@ pub trait AsyncRpc {
         peer_id: u64,
         peer_tid: u64,
     );
-    fn append_req(
+    fn send_req(
         &self,
         msg: *mut u8,
         rpc_id: u32,

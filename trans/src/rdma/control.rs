@@ -1,11 +1,9 @@
-#![allow(unused)]
 use std::alloc::Layout;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 use errno::errno;
-use libc::free;
-use libc::{malloc, memalign};
+use libc::{ free, memalign };
 use ll_alloc::LockedHeap;
 use rdma_sys::*;
 
@@ -174,8 +172,8 @@ impl<'control> RdmaControl<'control> {
         unsafe {
             *(send_addr as *mut RemoteMeta) = RemoteMeta {
                 peer_id: self.self_id,
-                raddr: unsafe { (*lmr).addr } as u64,
-                rid: unsafe { (*lmr).rkey },
+                raddr: (*lmr).addr as u64,
+                rid: (*lmr).rkey,
             };
         }
 
@@ -285,6 +283,11 @@ impl<'control> RdmaControl<'control> {
             )
         };
 
+        if ret != 0 {
+            println!("ibv_query_qp");
+            return;
+        }
+
         // bind mr and send meta
         // let mr_length = 4096 * NPAGES as usize;
         // let lm = unsafe { memalign(4096, mr_length) };
@@ -305,8 +308,8 @@ impl<'control> RdmaControl<'control> {
         unsafe {
             *(send_addr as *mut RemoteMeta) = RemoteMeta {
                 peer_id: self.self_id,
-                raddr: unsafe { (*lmr).addr } as u64,
-                rid: unsafe { (*lmr).rkey },
+                raddr: (*lmr).addr as u64,
+                rid: (*lmr).rkey,
             };
         }
 

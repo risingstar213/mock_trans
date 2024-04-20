@@ -267,7 +267,7 @@ impl<'sched> AsyncRpc for AsyncScheduler<'sched> {
     }
 
     #[allow(unused_variables)]
-    fn append_req(
+    fn send_req(
         &self,
         msg: *mut u8,
         rpc_id: u32,
@@ -347,6 +347,23 @@ impl<'sched> AsyncScheduler<'sched> {
                     if let Some(status) = self.dma_meta.lock().unwrap().get_mut::<usize>(cid) {
                         status.0 = DmaStatus::DmaError;
                     }
+                }
+            }
+        }
+    }
+
+    pub fn busy_until_dma_ready(&self, cid: u32) -> Result<(), ()> {
+        loop {
+            let status = self.dma_meta.lock().unwrap().get::<usize>(cid as _).unwrap().0;
+            match status {
+                DmaStatus::DmaIdle => {
+                    return Ok(());
+                }
+                DmaStatus::DmaError => {
+                    return Err(());
+                }
+                DmaStatus::DmaWaiting => {
+                    continue;
                 }
             }
         }

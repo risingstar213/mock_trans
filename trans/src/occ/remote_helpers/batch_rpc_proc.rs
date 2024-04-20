@@ -1,12 +1,14 @@
 use std::sync::Arc;
 
 use tokio::sync::mpsc;
-use tokio::sync::Mutex as AsyncMutex;
 
 use crate::framework::scheduler::AsyncScheduler;
 use crate::framework::rpc::*;
 use crate::memstore::memdb::MemDB;
+use crate::occ::cache_helpers::trans_cache_view::TransCacheView;
+use crate::occ::cache_helpers::trans_cache_view::TransKey;
 use crate::rdma::rcconn::RdmaRcConn;
+use crate::MAIN_ROUTINE_ID;
 use crate::MAX_RESP_SIZE;
 
 use super::*;
@@ -14,12 +16,13 @@ use super::*;
 use super::batch_rpc_msg_wrapper::BatchRpcReqWrapper;
 use super::batch_rpc_msg_wrapper::BatchRpcRespWrapper;
 use super::super::occ::LockContent;
-
+use super::super::cache_helpers::CacheReadSetItem;
 
 pub struct BatchRpcProc<'worker> {
-    memdb:     Arc<MemDB<'worker>>,
-    scheduler: Arc<AsyncScheduler<'worker>>,
-    sender:    Option<mpsc::Sender<YieldReq>>,
+    pub memdb:      Arc<MemDB<'worker>>,
+    pub scheduler:  Arc<AsyncScheduler<'worker>>,
+    pub sender:     Option<mpsc::Sender<YieldReq>>,
+    pub trans_view: TransCacheView<'worker>
 }
 
 impl<'worker> BatchRpcProc<'worker> {
@@ -28,12 +31,12 @@ impl<'worker> BatchRpcProc<'worker> {
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
             sender: None,
+            trans_view: TransCacheView::new(scheduler),
         }
     }
 }
 
 impl<'worker> BatchRpcProc<'worker> {
-    #[allow(unused)]
     pub fn read_rpc_handler(
         &self,
         src_conn: &mut RdmaRcConn,
@@ -362,7 +365,6 @@ impl<'worker> BatchRpcProc<'worker> {
     }
 }
 
-#[cfg(feature = "doca_deps")]
 impl<'worker> BatchRpcProc<'worker> {
     pub fn read_cache_rpc_handler(
         &self,
@@ -374,6 +376,10 @@ impl<'worker> BatchRpcProc<'worker> {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
         let resp_buf = self.scheduler.get_reply_buf();
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
+        
+        let trans_key = TransKey::new(&meta);
+        self.trans_view.start_trans(&trans_key);
+        let mut read_cache_writer = self.trans_view.new_read_cache_writer(&trans_key, MAIN_ROUTINE_ID);
 
         let req_header = req_wrapper.get_header();
 
@@ -394,9 +400,17 @@ impl<'worker> BatchRpcProc<'worker> {
                 length:   data_len,
             });
 
+            read_cache_writer.block_append_item(&self.trans_view, CacheReadSetItem{
+                table_id: req_item.table_id, 
+                key:      req_item.key,
+                old_seq:  meta.seq as u64,
+            });
+
             req_wrapper.shift_to_next_item::<ReadReqItem>(0);
             resp_wrapper.shift_to_next_item::<ReadRespItem>(data_len);
         }
+
+        read_cache_writer.block_sync_buf(&self.trans_view);
 
         resp_wrapper.set_header(BatchRpcRespHeader {
             write: false,
