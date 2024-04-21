@@ -19,8 +19,6 @@ impl Default for Account {
     }
 }
 
-impl MemStoreValue for Account {}
-
 fn prepare_data(memdb: &Arc<MemDB>) 
 {
     let mut occ1 = OccLocal::<8>::new(1, memdb);

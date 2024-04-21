@@ -34,6 +34,8 @@ impl<'worker> BatchRpcProc<'worker> {
             }
         }
 
+        self.trans_view.end_read_trans(&trans_key);
+
         let resp_buf = self.scheduler.get_reply_buf();
         let reduce_resp = unsafe { (resp_buf as *mut BatchRpcReduceResp).as_mut().unwrap() };
         *reduce_resp = BatchRpcReduceResp{

@@ -1,12 +1,14 @@
 pub mod common;
 
+pub mod rdma;
 #[cfg(feature = "doca_deps")]
 pub mod doca_dma;
 
 pub mod framework;
 pub mod memstore;
 pub mod occ;
-pub mod rdma;
+
+pub mod app;
 
 #[derive(Debug)]
 pub enum TransError {
@@ -55,5 +57,14 @@ const MAX_DMA_BUF_PER_ROUTINE: usize = 64;
 /////////////////// CACHE /////////////////////////////
 const MAX_LOCAL_CACHE_BUF_COUNT: usize = 16;
 
-/////////////////// WORKER ///////////////////////////
+/////////////////// WORKER ////////////////////////////
 const MAIN_ROUTINE_ID: u32 = 0;
+
+/////////////////// Small Bank Wokeloads //////////////
+const SMALL_BANK_NROUTINES: usize = 8;
+const SMALL_BANK_NTHREADS: usize = 4;
+const SMALL_BANK_NPARTITIONS:  usize = 2;
+const SMALL_BANK_DEFAULT_NACCOUNTS: usize = 1000;
+const SMALL_BANK_DEFAULT_NHOTACCOUTS: usize = 40;
+const SMALL_BANK_SCALE: usize = 1;
+const SMALL_BANK_TX_HOT: usize = 90;

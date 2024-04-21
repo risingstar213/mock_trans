@@ -5,6 +5,11 @@ use std::sync::atomic::Ordering;
 // just marker trait
 pub trait MemStoreValue: Clone + Send + Sync + Default {}
 
+impl<T> MemStoreValue for T
+where
+    T: Clone + Send + Sync + Default 
+{}
+
 #[repr(C)]
 pub struct MemNode<T>
 where

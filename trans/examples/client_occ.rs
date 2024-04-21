@@ -26,8 +26,6 @@ impl Default for Account {
     }
 }
 
-impl MemStoreValue for Account {}
-
 struct OccCtrlWorker<'worker> {
     memdb: Arc<MemDB<'worker>>,
     scheduler: Arc<AsyncScheduler<'worker>>,

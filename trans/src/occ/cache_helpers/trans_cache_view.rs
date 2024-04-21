@@ -131,16 +131,23 @@ impl<'worker> TransCacheView<'worker> {
     }
 
     #[inline]
-    pub fn start_trans(&self, key: &TransKey) {
+    pub fn start_read_trans(&self, key: &TransKey) {
         if self.trans_read_map.lock().unwrap().contains_key(key) {
             return;
         }
         self.trans_read_map.lock().unwrap().insert(key.clone(), Vec::new());
-        self.trans_read_map.lock().unwrap().insert(key.clone(), Vec::new());
     }
 
     #[inline]
-    pub fn end_trans(&self, key: &TransKey) {
+    pub fn start_write_trans(&self, key: &TransKey) {
+        if self.trans_write_map.lock().unwrap().contains_key(key) {
+            return;
+        }
+        self.trans_write_map.lock().unwrap().insert(key.clone(), Vec::new());
+    }
+
+    #[inline]
+    pub fn end_read_trans(&self, key: &TransKey) {
         let mut read_map = self.trans_read_map.lock().unwrap();
         let read_metas = read_map.get_mut(key).unwrap();
         while let Some(meta) = read_metas.pop() {
@@ -155,7 +162,10 @@ impl<'worker> TransCacheView<'worker> {
             }
         }
         read_map.remove(key);
+    }
 
+    #[inline]
+    pub fn end_write_trans(&self, key: &TransKey) {
         let mut write_map = self.trans_write_map.lock().unwrap();
 
         let write_metas =write_map.get_mut(key).unwrap();

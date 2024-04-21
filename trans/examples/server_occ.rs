@@ -26,8 +26,6 @@ impl Default for Account {
     }
 }
 
-impl MemStoreValue for Account {}
-
 struct OccProcWorker<'worker> {
     scheduler: Arc<AsyncScheduler<'worker>>,
     proc: BatchRpcProc<'worker>,

@@ -378,7 +378,7 @@ impl<'worker> BatchRpcProc<'worker> {
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
         
         let trans_key = TransKey::new(&meta);
-        self.trans_view.start_trans(&trans_key);
+        self.trans_view.start_read_trans(&trans_key);
         let mut read_cache_writer = self.trans_view.new_read_cache_writer(&trans_key, MAIN_ROUTINE_ID);
 
         let req_header = req_wrapper.get_header();

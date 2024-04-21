@@ -99,5 +99,3 @@ pub enum OccStatus {
     OccCommited,
     OccAborted
 }
-
-
