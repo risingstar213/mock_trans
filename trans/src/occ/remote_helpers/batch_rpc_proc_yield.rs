@@ -8,7 +8,7 @@ use super::super::occ::LockContent;
 use super::super::cache_helpers::CacheReadSetItem;
 use super::super::cache_helpers::trans_cache_view::TransKey;
 
-impl<'worker> BatchRpcProc<'worker> {
+impl BatchRpcProc {
     // work for validate cache
     // pub async fn validate_cache_work(&self, yield_req: YieldReq, cid: u32) {
     //     let trans_key = TransKey::new(&yield_req.yield_meta);

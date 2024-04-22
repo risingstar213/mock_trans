@@ -69,8 +69,8 @@ pub struct SmallBankClientReq {
     workload: SmallBankWordLoadId,
 }
 
-pub struct SmallBankWorker<'worker> {
+pub struct SmallBankWorker {
     part_id: u64,
     scheduler: Arc<AsyncScheduler>,
-    memdb: Arc<MemDB<'worker>>,
+    memdb: Arc<MemDB>,
 }

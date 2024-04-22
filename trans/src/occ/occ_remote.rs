@@ -11,12 +11,12 @@ use super::remote_helpers::batch_rpc_msg_wrapper::BatchRpcRespWrapper;
 use super::remote_helpers::batch_rpc_ctrl::BatchRpcCtrl;
 use super::remote_helpers::*;
 
-pub struct OccRemote<'trans, const MAX_ITEM_SIZE: usize>
+pub struct OccRemote<const MAX_ITEM_SIZE: usize>
 {
     status:    OccStatus,
     part_id:   u64,
     cid:       u32,
-    memdb:     Arc<MemDB<'trans>>,
+    memdb:     Arc<MemDB>,
     batch_rpc: BatchRpcCtrl,
     readset:   RwSet<MAX_ITEM_SIZE>,
     updateset: RwSet<MAX_ITEM_SIZE>,
@@ -24,9 +24,9 @@ pub struct OccRemote<'trans, const MAX_ITEM_SIZE: usize>
 }
 
 // local operations
-impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
+impl<const MAX_ITEM_SIZE: usize> OccRemote<MAX_ITEM_SIZE>
 {
-    pub fn new(part_id: u64, cid: u32, memdb: &Arc<MemDB<'trans>>, scheduler: &Arc<AsyncScheduler>) -> Self {
+    pub fn new(part_id: u64, cid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             status:    OccStatus::OccUnint,
             part_id:   part_id,
@@ -149,7 +149,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
     }
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
+impl<const MAX_ITEM_SIZE: usize> OccRemote<MAX_ITEM_SIZE>
 {
     #[inline]
     fn commit_writes_on(&mut self, update: bool) {
@@ -348,7 +348,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
     }
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
+impl<const MAX_ITEM_SIZE: usize> OccRemote<MAX_ITEM_SIZE>
 {
     async fn lock_writes(&mut self) {
         self.batch_rpc.restart_batch();
@@ -451,7 +451,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
     }
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
+impl<const MAX_ITEM_SIZE: usize> OccRemote< MAX_ITEM_SIZE>
 {
     pub fn start(&mut self) {
         self.batch_rpc.restart_batch();
@@ -497,7 +497,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
         write_idx
     }
 
-    pub async fn get_value<T: MemStoreValue + 'trans>(&mut self, update: bool, idx: usize) -> &T {
+    pub async fn get_value<'trans, T: MemStoreValue + 'trans>(&mut self, update: bool, idx: usize) -> &'trans T {
         // TODO: more careful check
         self.batch_rpc.send_batch_reqs();
         self.batch_rpc.wait_until_done().await;

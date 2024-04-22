@@ -16,7 +16,7 @@ use super::utils::{ random_get_accounts, account_to_part };
 // polymorphic manually
 
 // workload
-impl<'worker> SmallBankWorker<'worker> {
+impl SmallBankWorker {
     // update checking * 2
     pub async fn txn_send_payment(&self, rand_gen: &mut FastRandom, cid: u32) {
         let mut txn = OccRemote::<SMALL_BANK_MAX_ITEM_SIZE>::new(

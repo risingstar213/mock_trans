@@ -7,19 +7,19 @@ use crate::memstore::MemNodeMeta;
 use super::occ::{OccStatus, MemStoreItemEnum, LockContent};
 use super::rwset::{RwType, RwItem, RwSet};
 
-pub struct OccLocal<'trans, const MAX_ITEM_SIZE: usize> 
+pub struct OccLocal<const MAX_ITEM_SIZE: usize> 
 {
     status:    OccStatus,
     cid:       u32,
-    memdb:     Arc<MemDB<'trans>>,
+    memdb:     Arc<MemDB>,
     readset:   RwSet<MAX_ITEM_SIZE>,
     updateset: RwSet<MAX_ITEM_SIZE>,
     writeset:  RwSet<MAX_ITEM_SIZE>
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<'trans, MAX_ITEM_SIZE> 
+impl<const MAX_ITEM_SIZE: usize> OccLocal<MAX_ITEM_SIZE> 
 {
-    pub fn new(cid: u32, memdb: &Arc<MemDB<'trans>>) -> Self {
+    pub fn new(cid: u32, memdb: &Arc<MemDB>) -> Self {
         Self {
             status:    OccStatus::OccUnint,
             cid:       cid,
@@ -31,7 +31,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<'trans, MAX_ITEM_SIZE>
     }
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<'trans, MAX_ITEM_SIZE>
+impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<MAX_ITEM_SIZE>
 {
     fn lock_writes(&mut self) {
         if self.status != OccStatus::OccInprogress {
@@ -155,7 +155,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<'trans, MAX_ITEM_SIZE>
     }
 }
 
-impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<'trans, MAX_ITEM_SIZE>
+impl< const MAX_ITEM_SIZE: usize> OccLocal< MAX_ITEM_SIZE>
 {
     pub fn start(&mut self) {
         self.status = OccStatus::OccInprogress;

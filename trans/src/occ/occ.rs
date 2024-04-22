@@ -55,7 +55,7 @@ impl<const ITEM_MAX_SIZE: usize> MemStoreItemEnum<ITEM_MAX_SIZE> {
         item
     }
 
-    pub fn get_inner<T: MemStoreValue>(&self) -> &T {
+    pub fn get_inner<'trans, T: MemStoreValue + 'trans>(&self) -> &'trans T {
         if ITEM_MAX_SIZE < std::mem::size_of::<T>() {
             panic!("not rational!");
         }

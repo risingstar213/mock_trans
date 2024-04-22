@@ -35,12 +35,12 @@ pub enum MemStoreType {
     TabBplustree,
 }
 
-pub struct MemDB<'memdb> {
+pub struct MemDB {
     metas:  Vec<TableSchema>,
-    tables: Vec<Box<dyn MemStore + Send + Sync + 'memdb>>,
+    tables: Vec<Box<dyn MemStore + Send + Sync + 'static>>,
 }
 
-impl<'memdb> MemDB<'memdb>
+impl MemDB
 {
     pub fn new() -> Self {
         Self {
@@ -49,7 +49,7 @@ impl<'memdb> MemDB<'memdb>
         }
     }
 
-    pub fn add_schema(&mut self, table_id: usize, schema: TableSchema, table: impl MemStore + Send + Sync + 'memdb) {
+    pub fn add_schema(&mut self, table_id: usize, schema: TableSchema, table: impl MemStore + Send + Sync + 'static) {
         let table_count = self.metas.len();
         if table_count != table_id {
             panic!("not rational add schema");

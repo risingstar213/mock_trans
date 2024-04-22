@@ -19,14 +19,14 @@ use super::batch_rpc_msg_wrapper::BatchRpcRespWrapper;
 use super::super::occ::LockContent;
 use super::super::cache_helpers::CacheReadSetItem;
 
-pub struct BatchRpcProc<'worker> {
-    pub memdb:      Arc<MemDB<'worker>>,
+pub struct BatchRpcProc {
+    pub memdb:      Arc<MemDB>,
     pub scheduler:  Arc<AsyncScheduler>,
     // pub trans_view: TransCacheView<'worker>
 }
 
-impl<'worker> BatchRpcProc<'worker> {
-    pub fn new(memdb: &Arc<MemDB<'worker>>, scheduler: &Arc<AsyncScheduler>) -> Self {
+impl BatchRpcProc {
+    pub fn new(memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
@@ -35,7 +35,7 @@ impl<'worker> BatchRpcProc<'worker> {
     }
 }
 
-impl<'worker> BatchRpcProc<'worker> {
+impl BatchRpcProc {
     pub fn read_rpc_handler(
         &self,
         src_conn: &mut RdmaRcConn,
@@ -364,7 +364,7 @@ impl<'worker> BatchRpcProc<'worker> {
     }
 }
 
-impl<'worker> BatchRpcProc<'worker> {
+impl BatchRpcProc {
     // pub fn read_cache_rpc_handler(
     //     &self,
     //     src_conn: &mut RdmaRcConn,

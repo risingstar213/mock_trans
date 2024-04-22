@@ -26,13 +26,13 @@ impl Default for Account {
     }
 }
 
-struct OccCtrlWorker<'worker> {
-    memdb: Arc<MemDB<'worker>>,
+struct OccCtrlWorker {
+    memdb: Arc<MemDB>,
     scheduler: Arc<AsyncScheduler>,
 }
 
-impl<'worker> OccCtrlWorker<'worker> {
-    pub fn new(memdb: &Arc<MemDB<'worker>>, scheduler: &Arc<AsyncScheduler>) -> Self {
+impl OccCtrlWorker {
+    pub fn new(memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
@@ -40,7 +40,7 @@ impl<'worker> OccCtrlWorker<'worker> {
     }
 }
 
-impl<'worker> OccCtrlWorker<'worker> {
+impl OccCtrlWorker {
     async fn prepare_data(&self) {
         let mut occ1 = OccRemote::<8>::new(
             0, 
@@ -142,7 +142,7 @@ impl<'worker> OccCtrlWorker<'worker> {
     }
 }
 
-impl<'worker> AsyncWorker for OccCtrlWorker<'worker> {
+impl AsyncWorker for OccCtrlWorker {
     fn get_scheduler(&self) -> &AsyncScheduler {
         return &self.scheduler;
     }

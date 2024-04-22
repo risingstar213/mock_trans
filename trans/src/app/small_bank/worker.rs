@@ -12,7 +12,7 @@ use super::SmallBankWorker;
 use super::SmallBankClientReq;
 use super::SmallBankWordLoadId;
 
-impl<'worker> AsyncWorker for SmallBankWorker<'worker> {
+impl AsyncWorker for SmallBankWorker {
     fn get_scheduler(&self) -> &crate::framework::scheduler::AsyncScheduler {
         &self.scheduler
     }
@@ -22,7 +22,7 @@ impl<'worker> AsyncWorker for SmallBankWorker<'worker> {
     }
 }
 
-impl<'worker> SmallBankWorker<'worker> {
+impl SmallBankWorker {
     async fn work_routine(&self, cid: u32, rand_seed: usize, conn: Arc<AsyncMutex<mpsc::Receiver<SmallBankClientReq>>>) {
         let mut rand_gen = FastRandom::new(rand_seed);
         
@@ -55,7 +55,7 @@ impl<'worker> SmallBankWorker<'worker> {
     }
 }
 
-async fn run_workers<'worker>(worker: &Arc<SmallBankWorker<'worker>>, rand_seed: usize, conn: &Arc<AsyncMutex<mpsc::Receiver<SmallBankClientReq>>>) {
+async fn run_workers(worker: &Arc<SmallBankWorker>, rand_seed: usize, conn: &Arc<AsyncMutex<mpsc::Receiver<SmallBankClientReq>>>) {
     // let mut futures = Vec::new();
     let mut rand_gen = FastRandom::new(rand_seed);
     
