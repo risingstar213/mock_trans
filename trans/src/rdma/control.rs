@@ -55,14 +55,14 @@ struct RemoteMeta {
     rid: u32,
 }
 
-pub struct RdmaControl<'control> {
+pub struct RdmaControl {
     self_id: u64,
     listen_fd: Option<*mut rdma_cm_id>,
-    connections: HashMap<u64, Arc<Mutex<RdmaRcConn<'control>>>>,
+    connections: HashMap<u64, Arc<Mutex<RdmaRcConn>>>,
     allocator: Arc<RdmaBaseAllocator>,
 }
 
-impl<'control> RdmaControl<'control> {
+impl RdmaControl {
     pub fn new(self_id: u64) -> Self {
         let allocator = Arc::new(RdmaBaseAllocator::new());
 
@@ -256,7 +256,7 @@ impl<'control> RdmaControl<'control> {
         Ok(())
     }
 
-    pub fn get_connection(&self, peer_id: u64) -> Arc<Mutex<RdmaRcConn<'control>>> {
+    pub fn get_connection(&self, peer_id: u64) -> Arc<Mutex<RdmaRcConn>> {
         self.connections.get(&peer_id).unwrap().clone()
     }
 

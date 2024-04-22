@@ -59,9 +59,9 @@ enum DmaStatus {
 #[cfg(feature = "doca_deps")]
 struct DmaMeta(DmaStatus);
 
-pub struct AsyncScheduler<'sched> {
+pub struct AsyncScheduler {
     allocator: Mutex<RpcBufAllocator>,
-    conns: HashMap<u64, Arc<Mutex<RdmaRcConn<'sched>>>>,
+    conns: HashMap<u64, Arc<Mutex<RdmaRcConn>>>,
     //  read / write (one-side primitives)
     // pending for coroutines
     pendings: Mutex<Vec<u32>>,
@@ -70,7 +70,7 @@ pub struct AsyncScheduler<'sched> {
     reply_metas: Mutex<ReplyMeta>,
 
     // callbacks
-    callback: Weak<dyn RpcHandler + Send + Sync + 'sched>,
+    callback: Weak<dyn RpcHandler + Send + Sync + 'static>,
 
     #[cfg(feature = "doca_deps")]
     dma_conn: Option<Arc<Mutex<DocaDmaConn>>>,
@@ -79,10 +79,10 @@ pub struct AsyncScheduler<'sched> {
 }
 
 // 手动标记 Send + Sync
-unsafe impl<'sched> Send for AsyncScheduler<'sched> {}
-unsafe impl<'sched> Sync for AsyncScheduler<'sched> {}
+unsafe impl Send for AsyncScheduler {}
+unsafe impl Sync for AsyncScheduler {}
 
-impl<'sched> AsyncScheduler<'sched> {
+impl AsyncScheduler {
     pub fn new(routine_num: u32, allocator: &Arc<RdmaBaseAllocator>) -> Self {
         let mut pendings = Vec::new();
         #[cfg(feature = "doca_deps")]
@@ -108,11 +108,11 @@ impl<'sched> AsyncScheduler<'sched> {
         }
     }
 
-    pub fn append_conn(&mut self, id: u64, conn: &Arc<Mutex<RdmaRcConn<'sched>>>) {
+    pub fn append_conn(&mut self, id: u64, conn: &Arc<Mutex<RdmaRcConn>>) {
         self.conns.insert(id, conn.clone());
     }
 
-    pub fn register_callback(&mut self, callback: &Arc<impl RpcHandler + Send + Sync + 'sched>) {
+    pub fn register_callback(&mut self, callback: &Arc<impl RpcHandler + Send + Sync + 'static>) {
         self.callback = Arc::downgrade(callback) as _;
     }
 
@@ -123,7 +123,7 @@ impl<'sched> AsyncScheduler<'sched> {
     }
 }
 
-impl<'sched> RdmaSendCallback for AsyncScheduler<'sched> {
+impl RdmaSendCallback for AsyncScheduler {
     #[allow(unused)]
     fn rdma_send_handler(&self, wr_id: u64) {
         todo!();
@@ -132,7 +132,7 @@ impl<'sched> RdmaSendCallback for AsyncScheduler<'sched> {
 }
 
 // RPCs
-impl<'sched> AsyncScheduler<'sched> {
+impl AsyncScheduler {
     pub fn poll_recvs(&self) {
         // let mut pendings = self.pendings.lock().unwrap();
         for (_, conn) in self.conns.iter() {
@@ -168,7 +168,7 @@ impl<'sched> AsyncScheduler<'sched> {
     }
 }
 
-impl<'sched> RdmaRecvCallback for AsyncScheduler<'sched> {
+impl RdmaRecvCallback for AsyncScheduler {
     fn rdma_recv_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8) {
         // todo!();
         let meta = RpcHeaderMeta::from_header(unsafe { *(msg as *mut u32) });
@@ -212,7 +212,7 @@ impl<'sched> RdmaRecvCallback for AsyncScheduler<'sched> {
     }
 }
 
-impl<'sched> AsyncRpc for AsyncScheduler<'sched> {
+impl AsyncRpc for AsyncScheduler {
     fn get_reply_buf(&self) -> *mut u8 {
         // std::ptr::null_mut()
         // let layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::align_of::<usize>()).unwrap();
@@ -289,7 +289,7 @@ impl<'sched> AsyncRpc for AsyncScheduler<'sched> {
 
 // for doca dma
 #[cfg(feature = "doca_deps")]
-impl<'sched> AsyncScheduler<'sched> {
+impl AsyncScheduler {
     pub fn set_dma_conn(&mut self, dma_conn: &Arc<Mutex<DocaDmaConn>>) {
         self.dma_conn = Some(dma_conn.clone());
     }
@@ -403,7 +403,7 @@ impl<'sched> AsyncScheduler<'sched> {
 }
 
 // Async waiter
-impl<'sched> AsyncScheduler<'sched> {
+impl AsyncScheduler {
     pub async fn yield_now(&self, cid: u32) {
         // println!("yield: {}", _cid);
         tokio::task::yield_now().await;

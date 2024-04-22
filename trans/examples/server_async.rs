@@ -23,13 +23,13 @@ pub struct AddResponse {
 
 const ADD_ID: u32 = 0;
 
-struct AnswerClientWorker<'worker> {
-    scheduler: Arc<AsyncScheduler<'worker>>,
+struct AnswerClientWorker {
+    scheduler: Arc<AsyncScheduler>,
     number: Mutex<u64>,
 }
 
-impl<'worker> AnswerClientWorker<'worker> {
-    fn new(scheduler: &Arc<AsyncScheduler<'worker>>) -> Self {
+impl AnswerClientWorker {
+    fn new(scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             scheduler: scheduler.clone(),
             number: Mutex::new(0),
@@ -38,7 +38,7 @@ impl<'worker> AnswerClientWorker<'worker> {
 }
 
 // RPC handlers
-impl<'worker> AnswerClientWorker<'worker> {
+impl AnswerClientWorker {
     fn add_handler(
         &self,
         src_conn: &mut RdmaRcConn,
@@ -71,7 +71,7 @@ impl<'worker> AnswerClientWorker<'worker> {
     }
 }
 
-impl<'worker> RpcHandler for AnswerClientWorker<'worker> {
+impl RpcHandler for AnswerClientWorker {
     fn rpc_handler(
         &self,
         src_conn: &mut RdmaRcConn,
@@ -91,8 +91,8 @@ impl<'worker> RpcHandler for AnswerClientWorker<'worker> {
     }
 }
 
-impl<'worker> AsyncWorker<'worker> for AnswerClientWorker<'worker> {
-    fn get_scheduler(&self) -> &AsyncScheduler<'worker> {
+impl AsyncWorker for AnswerClientWorker {
+    fn get_scheduler(&self) -> &AsyncScheduler {
         return &self.scheduler;
     }
 

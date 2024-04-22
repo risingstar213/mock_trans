@@ -27,12 +27,12 @@ impl Default for Account {
 }
 
 struct OccProcWorker<'worker> {
-    scheduler: Arc<AsyncScheduler<'worker>>,
+    scheduler: Arc<AsyncScheduler>,
     proc: BatchRpcProc<'worker>,
 }
 
 impl<'worker> OccProcWorker<'worker> {
-    pub fn new(memdb: &Arc<MemDB<'worker>>, scheduler: &Arc<AsyncScheduler<'worker>>) -> Self {
+    pub fn new(memdb: &Arc<MemDB<'worker>>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             scheduler: scheduler.clone(),
             proc: BatchRpcProc::new(memdb, scheduler),
@@ -78,8 +78,8 @@ impl<'worker> RpcHandler for OccProcWorker<'worker> {
     }
 }
 
-impl<'worker> AsyncWorker<'worker> for OccProcWorker<'worker> {
-    fn get_scheduler(&self) -> &AsyncScheduler<'worker> {
+impl<'worker> AsyncWorker for OccProcWorker<'worker> {
+    fn get_scheduler(&self) -> &AsyncScheduler {
         return &self.scheduler;
     }
 

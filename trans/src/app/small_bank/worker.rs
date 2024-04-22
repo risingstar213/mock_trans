@@ -12,8 +12,8 @@ use super::SmallBankWorker;
 use super::SmallBankClientReq;
 use super::SmallBankWordLoadId;
 
-impl<'worker> AsyncWorker<'worker> for SmallBankWorker<'worker> {
-    fn get_scheduler(&self) -> &crate::framework::scheduler::AsyncScheduler<'worker> {
+impl<'worker> AsyncWorker for SmallBankWorker<'worker> {
+    fn get_scheduler(&self) -> &crate::framework::scheduler::AsyncScheduler {
         &self.scheduler
     }
 

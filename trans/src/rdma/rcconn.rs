@@ -55,21 +55,21 @@ impl Default for RdmaElement {
 // TODO: Recv elements can be shared between connections ?
 // How to treat buffers to store reqs? They cannot be shared.
 // Using SRQs to solve this problem
-pub struct RdmaRcConn<'conn> {
+pub struct RdmaRcConn {
     conn_id: u64,
     meta: RdmaRcMeta,
     allocator: Arc<RdmaBaseAllocator>,
     elements: RdmaElement,
     rwcs: [ibv_wc; MAX_RECV_SIZE],
     rhandler: Weak<dyn RdmaRecvCallback + Send + Sync + 'static>,
-    whandler: Weak<dyn RdmaSendCallback + Send + Sync + 'conn>,
+    whandler: Weak<dyn RdmaSendCallback + Send + Sync + 'static>,
 }
 
-unsafe impl<'conn> Send for RdmaRcConn<'conn> {}
+unsafe impl Send for RdmaRcConn {}
 // unsafe impl<'conn> Sync for RdmaRcConn<'conn> {}
 
 // RC Connection
-impl<'conn> RdmaRcConn<'conn> {
+impl RdmaRcConn {
     pub fn new(
         conn_id: u64,
         id: *mut rdma_cm_id,
@@ -422,7 +422,7 @@ impl<'conn> RdmaRcConn<'conn> {
     }
 }
 
-impl<'conn> OneSideComm for RdmaRcConn<'conn> {
+impl OneSideComm for RdmaRcConn {
     // for read / write primitives
     // read / write has no response, so the batch sending must be controlled by apps
     // the last must be send signaled
@@ -442,7 +442,7 @@ impl<'conn> OneSideComm for RdmaRcConn<'conn> {
     }
 }
 
-impl<'conn> TwoSidesComm for RdmaRcConn<'conn> {
+impl TwoSidesComm for RdmaRcConn {
     // for send primitives
     #[inline]
     fn flush_pending(&mut self) -> TransResult<()> {
@@ -468,7 +468,7 @@ impl<'conn> TwoSidesComm for RdmaRcConn<'conn> {
     }
 }
 
-impl<'conn> Drop for RdmaRcConn<'conn> {
+impl Drop for RdmaRcConn {
     fn drop(&mut self) {
         unsafe {
             rdma_dereg_mr(self.meta.lmr);

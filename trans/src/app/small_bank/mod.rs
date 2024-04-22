@@ -71,6 +71,6 @@ pub struct SmallBankClientReq {
 
 pub struct SmallBankWorker<'worker> {
     part_id: u64,
-    scheduler: Arc<AsyncScheduler<'worker>>,
+    scheduler: Arc<AsyncScheduler>,
     memdb: Arc<MemDB<'worker>>,
 }

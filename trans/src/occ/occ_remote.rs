@@ -17,7 +17,7 @@ pub struct OccRemote<'trans, const MAX_ITEM_SIZE: usize>
     part_id:   u64,
     cid:       u32,
     memdb:     Arc<MemDB<'trans>>,
-    batch_rpc: BatchRpcCtrl<'trans>,
+    batch_rpc: BatchRpcCtrl,
     readset:   RwSet<MAX_ITEM_SIZE>,
     updateset: RwSet<MAX_ITEM_SIZE>,
     writeset:  RwSet<MAX_ITEM_SIZE>
@@ -26,7 +26,7 @@ pub struct OccRemote<'trans, const MAX_ITEM_SIZE: usize>
 // local operations
 impl<'trans, const MAX_ITEM_SIZE: usize> OccRemote<'trans, MAX_ITEM_SIZE>
 {
-    pub fn new(part_id: u64, cid: u32, memdb: &Arc<MemDB<'trans>>, scheduler: &Arc<AsyncScheduler<'trans>>) -> Self {
+    pub fn new(part_id: u64, cid: u32, memdb: &Arc<MemDB<'trans>>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             status:    OccStatus::OccUnint,
             part_id:   part_id,

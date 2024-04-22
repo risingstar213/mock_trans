@@ -114,15 +114,15 @@ impl CacheMeta {
     }
 }
 
-pub struct TransCacheView<'worker> {
+pub struct TransCacheView {
     local_alloc: Mutex<LocalCacheBufAllocator>,
     trans_read_map: Mutex<HashMap<TransKey, Vec<CacheMeta>>>,
     trans_write_map: Mutex<HashMap<TransKey, Vec<CacheMeta>>>,
-    scheduler: Arc<AsyncScheduler<'worker>>,
+    scheduler: Arc<AsyncScheduler>,
 }
 
-impl<'worker> TransCacheView<'worker> {
-    pub fn new(scheduler: &Arc<AsyncScheduler<'worker>>) -> Self {
+impl TransCacheView {
+    pub fn new(scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             local_alloc: Mutex::new(LocalCacheBufAllocator::new()),
             trans_read_map: Mutex::new(HashMap::new()),
@@ -322,7 +322,7 @@ impl<'worker> TransCacheView<'worker> {
 }
 
 // read write
-impl<'worker> TransCacheView<'worker> {
+impl TransCacheView {
     // read buf
     #[inline]
     pub fn get_read_range_num(&self, key: &TransKey) -> usize {
@@ -528,7 +528,7 @@ impl<'worker> ReadCacheMetaWriter {
         self.dirty_count += 1;
     }
 
-    pub async fn append_item(&mut self, view: &TransCacheView<'worker>, item: CacheReadSetItem) {
+    pub async fn append_item(&mut self, view: &TransCacheView, item: CacheReadSetItem) {
         if self.meta.count + self.dirty_count >= max_read_item_count_in_buf() {
             view.sync_read_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count).await;
             view.alloc_read_buf(&self.trans_key);
@@ -545,13 +545,13 @@ impl<'worker> ReadCacheMetaWriter {
         self.set_item(item);
     }
 
-    pub async fn sync_buf(&self, view: &TransCacheView<'worker>) {
+    pub async fn sync_buf(&self, view: &TransCacheView) {
         if self.dma_local_buf.is_some() {
             view.sync_read_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count).await;
         }
     }
 
-    pub fn block_append_item(&mut self, view: &TransCacheView<'worker>, item: CacheReadSetItem) {
+    pub fn block_append_item(&mut self, view: &TransCacheView, item: CacheReadSetItem) {
         if self.meta.count + self.dirty_count >= max_read_item_count_in_buf() {
             view.block_sync_read_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count);
             view.alloc_read_buf(&self.trans_key);
@@ -567,7 +567,7 @@ impl<'worker> ReadCacheMetaWriter {
         }
     }
 
-    pub fn block_sync_buf(&self, view: &TransCacheView<'worker>) {
+    pub fn block_sync_buf(&self, view: &TransCacheView) {
         if self.dma_local_buf.is_some() {
             view.block_sync_read_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count);
         }
@@ -620,7 +620,7 @@ impl<'worker> WriteCacheMetaWriter {
         self.dirty_count += 1;
     }
 
-    pub async fn append_item(&mut self, view: &TransCacheView<'worker>, item: CacheWriteSetItem) {
+    pub async fn append_item(&mut self, view: &TransCacheView, item: CacheWriteSetItem) {
         if self.meta.count + self.dirty_count >= max_write_item_count_in_buf() {
             view.sync_write_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count).await;
             view.alloc_write_buf(&self.trans_key);
@@ -638,13 +638,13 @@ impl<'worker> WriteCacheMetaWriter {
         self.set_item(item);
     }
 
-    pub async fn sync_buf(&self, view: &TransCacheView<'worker>) {
+    pub async fn sync_buf(&self, view: &TransCacheView) {
         if self.dma_local_buf.is_some() {
             view.sync_write_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count).await;
         }
     }
 
-    pub fn block_append_item(&mut self, view: &TransCacheView<'worker>, item: CacheWriteSetItem) {
+    pub fn block_append_item(&mut self, view: &TransCacheView, item: CacheWriteSetItem) {
         if self.meta.count + self.dirty_count >= max_write_item_count_in_buf() {
             view.block_sync_write_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count);
             view.alloc_write_buf(&self.trans_key);
@@ -662,7 +662,7 @@ impl<'worker> WriteCacheMetaWriter {
         self.set_item(item);
     }
 
-    pub fn block_sync_buf(&self, view: &TransCacheView<'worker>) {
+    pub fn block_sync_buf(&self, view: &TransCacheView) {
         if self.dma_local_buf.is_some() {
             view.block_sync_write_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count);
         }

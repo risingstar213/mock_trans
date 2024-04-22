@@ -54,18 +54,18 @@ impl PeerReqKey {
 }
 
 // req bufs are shared between coroutines, so it doesn't matter.
-pub struct BatchRpcCtrl<'trans> {
+pub struct BatchRpcCtrl {
     status:    BatchRpcStatus,
     cid:       u32,
-    scheduler: Arc<AsyncScheduler<'trans>>,
+    scheduler: Arc<AsyncScheduler>,
     req_msgs:  Vec<BatchRpcReq>,
     peer_map:  HashMap<PeerReqKey, usize>,
     resp_buf:  Option<usize>,
 }
 
-impl<'trans> BatchRpcCtrl<'trans> 
+impl BatchRpcCtrl 
 {   
-    pub fn new(scheduler: &Arc<AsyncScheduler<'trans>>, cid: u32) -> Self {
+    pub fn new(scheduler: &Arc<AsyncScheduler>, cid: u32) -> Self {
         Self {
             status:    BatchRpcStatus::BatchUninit,
             cid:       cid,

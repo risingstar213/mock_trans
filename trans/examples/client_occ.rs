@@ -28,11 +28,11 @@ impl Default for Account {
 
 struct OccCtrlWorker<'worker> {
     memdb: Arc<MemDB<'worker>>,
-    scheduler: Arc<AsyncScheduler<'worker>>,
+    scheduler: Arc<AsyncScheduler>,
 }
 
 impl<'worker> OccCtrlWorker<'worker> {
-    pub fn new(memdb: &Arc<MemDB<'worker>>, scheduler: &Arc<AsyncScheduler<'worker>>) -> Self {
+    pub fn new(memdb: &Arc<MemDB<'worker>>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
@@ -142,8 +142,8 @@ impl<'worker> OccCtrlWorker<'worker> {
     }
 }
 
-impl<'worker> AsyncWorker<'worker> for OccCtrlWorker<'worker> {
-    fn get_scheduler(&self) -> &AsyncScheduler<'worker> {
+impl<'worker> AsyncWorker for OccCtrlWorker<'worker> {
+    fn get_scheduler(&self) -> &AsyncScheduler {
         return &self.scheduler;
     }
 

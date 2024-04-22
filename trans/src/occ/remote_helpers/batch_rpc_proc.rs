@@ -21,12 +21,12 @@ use super::super::cache_helpers::CacheReadSetItem;
 
 pub struct BatchRpcProc<'worker> {
     pub memdb:      Arc<MemDB<'worker>>,
-    pub scheduler:  Arc<AsyncScheduler<'worker>>,
+    pub scheduler:  Arc<AsyncScheduler>,
     // pub trans_view: TransCacheView<'worker>
 }
 
 impl<'worker> BatchRpcProc<'worker> {
-    pub fn new(memdb: &Arc<MemDB<'worker>>, scheduler: &Arc<AsyncScheduler<'worker>>) -> Self {
+    pub fn new(memdb: &Arc<MemDB<'worker>>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
