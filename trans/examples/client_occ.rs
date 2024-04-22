@@ -182,6 +182,16 @@ async fn main() {
     let worker = Arc::new(OccCtrlWorker::new(&memdb, &scheduler));
     // scheduler.register_callback(&worker);
 
+    std::thread::spawn(move || {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async {
+            println!("Hello world");
+        })
+    });
+
     {
         let worker1 = worker.clone();
         tokio::task::spawn(async move {

@@ -1,3 +1,4 @@
+use core::panic;
 use std::pin::Pin;
 use std::sync::{ Arc, Mutex };
 use std::hash::Hash;
@@ -184,6 +185,7 @@ impl<'worker> TransCacheView<'worker> {
         write_map.remove(key);
     }
 
+    #[cfg(feature = "doca_deps")]
     fn get_local_dma_buf(&self, cid: u32) -> DmaLocalBuf {
         self.scheduler.dma_get_local_buf(cid)
     }
@@ -193,29 +195,69 @@ impl<'worker> TransCacheView<'worker> {
         match &meta.buf {
             CacheBuf::LocalBuf(buf) => {
                 unsafe {
-                    buf.get_const_slice(meta.count)
+                    return buf.get_const_slice(meta.count);
                 }
             }
             CacheBuf::RemoteBuf(buf) => {
-                let remote_off = buf.get_off();
-                let payload = std::mem::size_of::<ITEM>() * meta.count;
-                let dma_local_buf = self.scheduler.dma_get_local_buf(cid);
+                #[cfg(feature = "doca_deps")]
+                if true {
+                    let remote_off = buf.get_off();
+                    let payload = std::mem::size_of::<ITEM>() * meta.count;
+                    let dma_local_buf = self.scheduler.dma_get_local_buf(cid);
 
-                loop {
-                    // sync functions can be more useful ???
-                    self.scheduler.post_read_dma_req(dma_local_buf.get_off(), remote_off, payload, cid);
+                    loop {
+                        // sync functions can be more useful ???
+                        self.scheduler.post_read_dma_req(dma_local_buf.get_off(), remote_off, payload, cid);
 
-                    match self.scheduler.yield_until_dma_ready(cid).await {
-                        Ok(_) => {
-                            break;
+                        match self.scheduler.yield_until_dma_ready(cid).await {
+                            Ok(_) => {
+                                break;
+                            }
+                            Err(_) => {}
                         }
-                        Err(_) => {}
                     }
+
+                    return unsafe { dma_local_buf.get_const_slice(meta.count) };
                 }
 
+                panic!("unsupported!");
+
+            }
+        }
+    }
+
+    #[inline]
+    fn block_get_buf_slice<ITEM: Clone + 'static>(&self, meta: CacheMeta, cid: u32) -> &[ITEM] {
+        match &meta.buf {
+            CacheBuf::LocalBuf(buf) => {
                 unsafe {
-                    dma_local_buf.get_const_slice(meta.count)
+                    return buf.get_const_slice(meta.count);
                 }
+            }
+            CacheBuf::RemoteBuf(buf) => {
+                #[cfg(feature = "doca_deps")]
+                if true {
+                    let remote_off = buf.get_off();
+                    let payload = std::mem::size_of::<ITEM>() * meta.count;
+                    let dma_local_buf = self.scheduler.dma_get_local_buf(cid);
+
+                    loop {
+                        // sync functions can be more useful ???
+                        self.scheduler.post_read_dma_req(dma_local_buf.get_off(), remote_off, payload, cid);
+
+                        match self.scheduler.busy_until_dma_ready(cid) {
+                            Ok(_) => {
+                                break;
+                            }
+                            Err(_) => {}
+                        }
+                    }
+
+                    return unsafe { dma_local_buf.get_const_slice(meta.count) };
+                }
+
+                panic!("unsupported!");
+
             }
         }
     }
@@ -225,20 +267,26 @@ impl<'worker> TransCacheView<'worker> {
         match &meta.buf {
             CacheBuf::LocalBuf(_) => {}
             CacheBuf::RemoteBuf(buf) => {
-                let remote_off = buf.get_off() + meta.count * std::mem::size_of::<ITEM>();
-                let payload = dirty_count * std::mem::size_of::<ITEM>();
+                #[cfg(feature = "doca_deps")]
+                if true {
+                    let remote_off = buf.get_off() + meta.count * std::mem::size_of::<ITEM>();
+                    let payload = dirty_count * std::mem::size_of::<ITEM>();
 
-                loop {
-                    // sync functions can be more useful ???
-                    self.scheduler.post_write_dma_req(dma_local_buf.unwrap().get_off(), remote_off, payload, cid);
+                    loop {
+                        // sync functions can be more useful ???
+                        self.scheduler.post_write_dma_req(dma_local_buf.unwrap().get_off(), remote_off, payload, cid);
 
-                    match self.scheduler.yield_until_dma_ready(cid).await {
-                        Ok(_) => {
-                            break;
+                        match self.scheduler.yield_until_dma_ready(cid).await {
+                            Ok(_) => {
+                                break;
+                            }
+                            Err(_) => {}
                         }
-                        Err(_) => {}
                     }
+
+                    return;
                 }
+                panic!("unsupported!");
             }
         }
     }
@@ -247,20 +295,27 @@ impl<'worker> TransCacheView<'worker> {
         match &meta.buf {
             CacheBuf::LocalBuf(_) => {}
             CacheBuf::RemoteBuf(buf) => {
-                let remote_off = buf.get_off() + meta.count * std::mem::size_of::<ITEM>();
-                let payload = dirty_count * std::mem::size_of::<ITEM>();
+                #[cfg(feature = "doca_deps")]
+                if true {
+                    let remote_off = buf.get_off() + meta.count * std::mem::size_of::<ITEM>();
+                    let payload = dirty_count * std::mem::size_of::<ITEM>();
 
-                loop {
-                    // sync functions can be more useful ???
-                    self.scheduler.post_write_dma_req(dma_local_buf.unwrap().get_off(), remote_off, payload, cid);
+                    loop {
+                        // sync functions can be more useful ???
+                        self.scheduler.post_write_dma_req(dma_local_buf.unwrap().get_off(), remote_off, payload, cid);
 
-                    match self.scheduler.busy_until_dma_ready(cid) {
-                        Ok(_) => {
-                            break;
+                        match self.scheduler.busy_until_dma_ready(cid) {
+                            Ok(_) => {
+                                break;
+                            }
+                            Err(_) => {}
                         }
-                        Err(_) => {}
                     }
+
+                    return;
                 }
+
+                panic!("unsupported");
             }
         }
     }
@@ -284,12 +339,20 @@ impl<'worker> TransCacheView<'worker> {
     }
 
     #[inline]
+    pub fn block_get_read_buf(&self, key: &TransKey, idx: usize, cid: u32) -> &[CacheReadSetItem] {
+        let read_map = self.trans_read_map.lock().unwrap();
+        let meta = read_map.get(key).unwrap().get(idx).unwrap().clone();
+        drop(read_map);
+        self.block_get_buf_slice(meta, cid)
+    }
+
+    #[inline]
     pub fn alloc_read_buf(&self, key: &TransKey) {
-        let new_buf = self.scheduler.dma_alloc_remote_buf();
+        let new_buf = self.local_alloc.lock().unwrap().alloc_buf().unwrap();
 
         let mut read_map = self.trans_read_map.lock().unwrap();
         let read_vec = read_map.get_mut(key).unwrap();
-        read_vec.push(CacheMeta::new(CacheBuf::RemoteBuf(new_buf), 0));
+        read_vec.push(CacheMeta::new(CacheBuf::LocalBuf(new_buf), 0));
     }
 
     #[inline]
@@ -355,11 +418,19 @@ impl<'worker> TransCacheView<'worker> {
         self.get_buf_slice(meta, cid).await
     }
 
+    #[inline]
+    pub fn block_get_write_buf(&self, key: &TransKey, idx: usize, cid: u32) -> &[CacheWriteSetItem] {
+        let write_map = self.trans_write_map.lock().unwrap();
+        let meta = write_map.get(key).unwrap().get(idx).unwrap().clone();
+        drop(write_map);
+        self.block_get_buf_slice(meta, cid)
+    }
+
     pub fn alloc_write_buf(&self, key: &TransKey) {
-        let new_buf = self.scheduler.dma_alloc_remote_buf();
+        let new_buf = self.local_alloc.lock().unwrap().alloc_buf().unwrap();
         let mut write_map = self.trans_write_map.lock().unwrap();
         let metas = write_map.get_mut(key).unwrap();
-        metas.push(CacheMeta::new(CacheBuf::RemoteBuf(new_buf), 0));
+        metas.push(CacheMeta::new(CacheBuf::LocalBuf(new_buf), 0));
     }
 
     #[inline]
@@ -439,12 +510,18 @@ impl<'worker> ReadCacheMetaWriter {
                 }
             }
             CacheBuf::RemoteBuf(_) => {
-                let idx = self.dirty_count;
-                if let Some(dma_buf) = &mut self.dma_local_buf {
-                    unsafe {
-                        dma_buf.set_item(idx, item);
+                #[cfg(feature = "doca_deps")]
+                if true {
+                    let idx = self.dirty_count;
+                    if let Some(dma_buf) = &mut self.dma_local_buf {
+                        unsafe {
+                            dma_buf.set_item(idx, item);
+                        }
                     }
+                    return;
                 }
+
+                panic!("unsupported");
             }
         }
 
@@ -458,6 +535,7 @@ impl<'worker> ReadCacheMetaWriter {
 
             self.meta = view.get_last_read_meta(&self.trans_key);
 
+            #[cfg(feature = "doca_deps")]
             if self.meta.buf.is_remote_buf() && self.dma_local_buf.is_none() {
                 self.dma_local_buf = Some(view.get_local_dma_buf(self.cid));
             }
@@ -480,6 +558,7 @@ impl<'worker> ReadCacheMetaWriter {
 
             self.meta = view.get_last_read_meta(&self.trans_key);
 
+            #[cfg(feature = "doca_deps")]
             if self.meta.buf.is_remote_buf() && self.dma_local_buf.is_none() {
                 self.dma_local_buf = Some(view.get_local_dma_buf(self.cid));
             }
@@ -523,12 +602,18 @@ impl<'worker> WriteCacheMetaWriter {
                 }
             }
             CacheBuf::RemoteBuf(_) => {
-                let idx = self.dirty_count;
-                if let Some(dma_buf) = &mut self.dma_local_buf {
-                    unsafe {
-                        dma_buf.set_item(idx, item);
+                #[cfg(feature = "doca_deps")]
+                if true {
+                    let idx = self.dirty_count;
+                    if let Some(dma_buf) = &mut self.dma_local_buf {
+                        unsafe {
+                            dma_buf.set_item(idx, item);
+                        }
                     }
+                    return;
                 }
+
+                panic!("unsupported!");
             }
         }
 
@@ -542,6 +627,7 @@ impl<'worker> WriteCacheMetaWriter {
 
             self.meta = view.get_last_write_meta(&self.trans_key);
 
+            #[cfg(feature = "doca_deps")]
             if self.meta.buf.is_remote_buf() && self.dma_local_buf.is_none() {
                 self.dma_local_buf = Some(view.get_local_dma_buf(self.cid));
             }
@@ -565,6 +651,7 @@ impl<'worker> WriteCacheMetaWriter {
 
             self.meta = view.get_last_write_meta(&self.trans_key);
 
+            #[cfg(feature = "doca_deps")]
             if self.meta.buf.is_remote_buf() && self.dma_local_buf.is_none() {
                 self.dma_local_buf = Some(view.get_local_dma_buf(self.cid));
             }

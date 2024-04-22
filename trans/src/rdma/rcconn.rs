@@ -61,7 +61,7 @@ pub struct RdmaRcConn<'conn> {
     allocator: Arc<RdmaBaseAllocator>,
     elements: RdmaElement,
     rwcs: [ibv_wc; MAX_RECV_SIZE],
-    rhandler: Weak<dyn RdmaRecvCallback + Send + Sync + 'conn>,
+    rhandler: Weak<dyn RdmaRecvCallback + Send + Sync + 'static>,
     whandler: Weak<dyn RdmaSendCallback + Send + Sync + 'conn>,
 }
 
@@ -148,7 +148,7 @@ impl<'conn> RdmaRcConn<'conn> {
 
     pub fn register_recv_callback(
         &mut self,
-        handler: &Arc<impl RdmaRecvCallback + Send + Sync + 'conn>,
+        handler: &Arc<impl RdmaRecvCallback + Send + Sync + 'static>,
     ) -> TransResult<()> {
         self.rhandler = Arc::downgrade(handler) as _;
         Ok(())

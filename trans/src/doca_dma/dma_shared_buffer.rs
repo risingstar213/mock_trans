@@ -2,12 +2,7 @@ use crate::MAX_DMA_BUF_PER_ROUTINE;
 use crate::MAX_DMA_BUF_SIZE;
 use crate::MAX_DMA_BUF_REMOTE;
 
-#[derive(Clone, Copy)]
-pub struct DmaLocalBuf {
-    saddr: usize,
-    off:   usize,
-    len:   usize,
-}
+use super::{ DmaLocalBuf, DmaRemoteBuf };
 
 impl DmaLocalBuf {
     pub fn new(saddr: usize, off: usize, len: usize) -> Self {
@@ -86,12 +81,6 @@ impl DmaLocalBufAllocator {
         }
         buf
     }
-}
-
-#[derive(Clone)]
-pub struct DmaRemoteBuf {
-    off:   usize,
-    len:   usize,
 }
 
 impl DmaRemoteBuf {

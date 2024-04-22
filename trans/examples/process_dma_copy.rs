@@ -1,8 +1,10 @@
+#[cfg(feature = "doca_deps")]
 use doca::*;
-
+#[cfg(feature = "doca_deps")]
 use trans::doca_dma::connection::DocaDmaControl;
 
-fn main() {
+#[cfg(feature = "doca_deps")]
+fn test() {
 
     let mut control = DocaDmaControl::new();
     control.listen_on("af:00.0", "0.0.0.0:7473".parse().unwrap(), 1);
@@ -70,4 +72,10 @@ fn main() {
         dst_off,
         String::from_utf8(dst_slice.to_vec()).unwrap()
     );
+}
+
+
+fn main() {
+    #[cfg(feature = "doca_deps")]
+    test();
 }

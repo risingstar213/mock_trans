@@ -1,6 +1,12 @@
 mod utils;
 pub mod workload;
+pub mod worker;
 pub mod local_client;
+
+use std::sync::Arc;
+
+use crate::framework::scheduler::AsyncScheduler;
+use crate::memstore::memdb::MemDB;
 
 pub mod small_bank_table_id {
     pub const ACCOUNTS_TABLE_ID: usize = 0;
@@ -34,4 +40,37 @@ pub struct SmallBankSavings {
 #[repr(C)]
 pub struct SmallBankChecking {
     c_balance: f64,
+}
+
+pub enum SmallBankWordLoadId {
+    TxnSendPayment,
+    TxnDepositChecking,
+    TxnBalance,
+    TxnTransactSavings,
+    TxnWriteCheck,
+    TxnAmalgamate,
+}
+
+impl From<usize> for SmallBankWordLoadId {
+    fn from(value: usize) -> Self {
+        match value {
+            0 => SmallBankWordLoadId::TxnSendPayment,
+            1 => SmallBankWordLoadId::TxnDepositChecking,
+            2 => SmallBankWordLoadId::TxnBalance,
+            3 => SmallBankWordLoadId::TxnTransactSavings,
+            4 => SmallBankWordLoadId::TxnWriteCheck,
+            5 => SmallBankWordLoadId::TxnAmalgamate,
+            _ => panic!("unsupported"),
+        }
+    }
+}
+
+pub struct SmallBankClientReq {
+    workload: SmallBankWordLoadId,
+}
+
+pub struct SmallBankWorker<'worker> {
+    part_id: u64,
+    scheduler: Arc<AsyncScheduler<'worker>>,
+    memdb: Arc<MemDB<'worker>>,
 }

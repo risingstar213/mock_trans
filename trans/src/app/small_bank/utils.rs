@@ -50,11 +50,11 @@ pub fn random_get_accounts(num: usize, rand_gen: &mut FastRandom, accounts: &mut
 }
 
 lazy_static! {
-    static ref hash_builder: RandomState = RandomState::new();
+    static ref HASH_BUILDER: RandomState = RandomState::new();
 }
 
 pub fn account_to_part(account: usize) -> usize {
-    let mut hasher = hash_builder.build_hasher();
+    let mut hasher = HASH_BUILDER.build_hasher();
     account.hash(&mut hasher);
 
     hasher.finish() as usize % SMALL_BANK_NPARTITIONS

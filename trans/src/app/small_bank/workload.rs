@@ -5,6 +5,7 @@ use crate::framework::scheduler::AsyncScheduler;
 use crate::memstore::memdb::MemDB;
 use crate::occ::occ_remote::OccRemote;
 
+use super::SmallBankWorker;
 use super::small_bank_table_id;
 use super::SMALL_BANK_MAX_ITEM_SIZE;
 use super::SmallBankAccounts;
@@ -13,24 +14,9 @@ use super::SmallBankSavings;
 use super::utils::{ random_get_accounts, account_to_part };
 
 // polymorphic manually
-pub struct SmallBankWorkload<'worker> {
-    part_id: u64,
-    scheduler: Arc<AsyncScheduler<'worker>>,
-    memdb: Arc<MemDB<'worker>>,
-}
-
-impl<'worker> SmallBankWorkload<'worker> {
-    pub fn new(part_id: u64, scheduler: &Arc<AsyncScheduler<'worker>>, memdb: &Arc<MemDB<'worker>>) -> Self {
-        Self {
-            part_id: part_id,
-            scheduler: scheduler.clone(),
-            memdb: memdb.clone(),
-        }
-    }
-}
 
 // workload
-impl<'worker> SmallBankWorkload<'worker> {
+impl<'worker> SmallBankWorker<'worker> {
     // update checking * 2
     pub async fn txn_send_payment(&self, rand_gen: &mut FastRandom, cid: u32) {
         let mut txn = OccRemote::<SMALL_BANK_MAX_ITEM_SIZE>::new(
@@ -217,7 +203,7 @@ impl<'worker> SmallBankWorkload<'worker> {
     }
 
     // read checing && saving -> write checking
-    pub async fn txn_txn_amal(&self, rand_gen: &mut FastRandom, cid: u32) {
+    pub async fn txn_amalgamate(&self, rand_gen: &mut FastRandom, cid: u32) {
         let mut txn = OccRemote::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
             cid, 

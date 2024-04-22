@@ -11,12 +11,11 @@ where
     fn has_stopped(&self) -> bool;
 
     // routine 0
-    fn main_routine(self: &Arc<Self>) -> impl std::future::Future<Output = ()> + Send {
-        let self_clone = self.clone();
+    fn main_routine(self: Arc<Self>) -> impl std::future::Future<Output = ()> + Send {
         async move {
-            let scheduler = self_clone.get_scheduler();
+            let scheduler = self.get_scheduler();
             loop {
-                if self_clone.has_stopped() {
+                if self.has_stopped() {
                     break;
                 }
 

@@ -115,8 +115,8 @@ pub struct AbortReqItem {
     pub(crate) insert:   bool,
 }
 
-pub struct YieldReq {
-    yield_rpc_id: occ_rpc_id::Type,
-    yield_meta:   RpcProcessMeta,
-    addi_success: bool,
-}
+// pub struct YieldReq {
+//     yield_rpc_id: occ_rpc_id::Type,
+//     yield_meta:   RpcProcessMeta,
+//     addi_success: bool,
+// }

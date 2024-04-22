@@ -1,7 +1,6 @@
 pub mod common;
 
 pub mod rdma;
-#[cfg(feature = "doca_deps")]
 pub mod doca_dma;
 
 pub mod framework;

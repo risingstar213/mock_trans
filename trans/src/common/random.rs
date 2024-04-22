@@ -18,6 +18,10 @@ impl FastRandom {
     pub fn next(&mut self) -> usize {
         return (self.next_bits(32) << 32) + self.next_bits(32);
     }
+
+    pub fn next_uniform(&mut self) -> f64 {
+        (((self.next_bits(26) << 27) + self.next_bits(27)) as f64) / ((1usize << 53) as f64)
+    }
     
     fn set_seed0(&mut self, seed: usize) {
         self.seed = (seed ^ 0x5DEECE66Dusize) & ((1usize << 48) - 1);
