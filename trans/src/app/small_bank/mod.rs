@@ -2,11 +2,13 @@ mod utils;
 pub mod workload;
 pub mod worker;
 pub mod local_client;
+pub mod loader;
 
 use std::sync::Arc;
 
 use crate::framework::scheduler::AsyncScheduler;
 use crate::memstore::memdb::MemDB;
+use crate::occ::BatchRpcProc;
 
 pub mod small_bank_table_id {
     pub const ACCOUNTS_TABLE_ID: usize = 0;
@@ -71,6 +73,20 @@ pub struct SmallBankClientReq {
 
 pub struct SmallBankWorker {
     part_id: u64,
-    scheduler: Arc<AsyncScheduler>,
+    tid: u32,
     memdb: Arc<MemDB>,
+    scheduler: Arc<AsyncScheduler>,
+    proc: BatchRpcProc,
+}
+
+impl SmallBankWorker {
+    pub fn new(part_id: u64, tid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
+        Self {
+            part_id: part_id,
+            tid: tid, 
+            scheduler: scheduler.clone(),
+            memdb: memdb.clone(),
+            proc: BatchRpcProc::new(tid, memdb, scheduler),
+        }
+    }
 }

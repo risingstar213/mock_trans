@@ -17,11 +17,11 @@ const fn scale_factor() -> usize {
     return SMALL_BANK_SCALE * SMALL_BANK_NTHREADS;
 }
 
-const fn accounts_num() -> usize {
+pub const fn accounts_num() -> usize {
     return SMALL_BANK_DEFAULT_NACCOUNTS * SMALL_BANK_NPARTITIONS * scale_factor();
 }
 
-const fn hot_accounts_num() -> usize {
+pub const fn hot_accounts_num() -> usize {
     return SMALL_BANK_DEFAULT_NHOTACCOUTS * SMALL_BANK_NPARTITIONS * scale_factor();
 }
 

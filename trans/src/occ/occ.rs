@@ -4,15 +4,17 @@ use crate::memstore::MemStoreValue;
 
 bitfields!(
     pub LockContent: u64 {
-        pub peer_id: 54,
+        pub peer_id: 34,
+        pub tid:     20,
         pub cid:     10,
     }
 );
 
 impl LockContent {
-    pub fn new(peer_id: u64, cid: u32) -> Self {
+    pub fn new(peer_id: u64, tid: u32, cid: u32) -> Self {
         Self {
             peer_id: peer_id,
+            tid:     tid as _,
             cid:     cid as _,
         }
     }

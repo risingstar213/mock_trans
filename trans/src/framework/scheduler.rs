@@ -60,6 +60,7 @@ enum DmaStatus {
 struct DmaMeta(DmaStatus);
 
 pub struct AsyncScheduler {
+    tid: usize,
     allocator: Mutex<RpcBufAllocator>,
     conns: HashMap<u64, Arc<Mutex<RdmaRcConn>>>,
     //  read / write (one-side primitives)
@@ -83,7 +84,7 @@ unsafe impl Send for AsyncScheduler {}
 unsafe impl Sync for AsyncScheduler {}
 
 impl AsyncScheduler {
-    pub fn new(routine_num: u32, allocator: &Arc<RdmaBaseAllocator>) -> Self {
+    pub fn new(tid: usize, routine_num: u32, allocator: &Arc<RdmaBaseAllocator>) -> Self {
         let mut pendings = Vec::new();
         #[cfg(feature = "doca_deps")]
         let mut dma_meta = Vec::new();
@@ -93,6 +94,7 @@ impl AsyncScheduler {
             dma_meta.push(DmaMeta(DmaStatus::DmaIdle));
         }
         Self {
+            tid: tid,
             allocator: Mutex::new(RpcBufAllocator::new(routine_num, allocator)),
             conns: HashMap::new(),
             pendings: Mutex::new(pendings),

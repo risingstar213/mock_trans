@@ -20,8 +20,8 @@ pub struct TransKey {
 }
 
 impl TransKey {
-    pub fn new(meta: &RpcProcessMeta) -> Self {
-        let lockcontent = LockContent::new(meta.peer_id, meta.rpc_cid);
+    pub fn new(tid: u32, meta: &RpcProcessMeta) -> Self {
+        let lockcontent = LockContent::new(meta.peer_id, tid, meta.rpc_cid);
         Self {
             key: lockcontent.to_content(),
         }

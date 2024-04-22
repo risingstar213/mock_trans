@@ -275,7 +275,7 @@ impl RdmaRcConn {
 
         let recv_head = self.elements.recv_head;
         let mut recv_tail = recv_head + recv_num - 1;
-        if recv_tail > MAX_RECV_SIZE as u64 {
+        if recv_tail >= MAX_RECV_SIZE as u64 {
             recv_tail -= MAX_RECV_SIZE as u64;
         }
 
@@ -338,10 +338,10 @@ impl RdmaRcConn {
             match wc.opcode {
                 ibv_wc_opcode::IBV_WC_SEND => {
                     let element = &mut self.elements;
-                    println!(
-                        "poll send high: {}, low: {}",
-                        element.high_watermark, element.low_watermark
-                    );
+                    // println!(
+                    //     "poll send high: {}, low: {}",
+                    //     element.high_watermark, element.low_watermark
+                    // );
                 }
                 _ => {
                     self.whandler.upgrade().unwrap().rdma_send_handler(wc.wr_id);

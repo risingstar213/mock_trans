@@ -110,7 +110,7 @@ async fn main() {
     rdma.connect(1, "10.10.10.6\0", "7472\0").unwrap();
 
     let allocator = rdma.get_allocator();
-    let mut scheduler = Arc::new(AsyncScheduler::new(2, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new(0, 2, &allocator));
 
     let conn = rdma.get_connection(1);
     conn.lock().unwrap().init_and_start_recvs().unwrap();

@@ -19,8 +19,10 @@ use super::utils::{ random_get_accounts, account_to_part };
 impl SmallBankWorker {
     // update checking * 2
     pub async fn txn_send_payment(&self, rand_gen: &mut FastRandom, cid: u32) {
+        println!("txn_send_payment");
         let mut txn = OccRemote::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
+            self.tid,
             cid, 
             &self.memdb, 
             &self.scheduler,
@@ -63,8 +65,10 @@ impl SmallBankWorker {
 
     // update checking
     pub async fn txn_deposit_checking(&self, rand_gen: &mut FastRandom, cid: u32) {
+        println!("txn_deposit_checking");
         let mut txn = OccRemote::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
+            self.tid,
             cid, 
             &self.memdb, 
             &self.scheduler,
@@ -94,8 +98,10 @@ impl SmallBankWorker {
 
     // read checking && saving
     pub async fn txn_balance(&self, rand_gen: &mut FastRandom, cid: u32) {
+        println!("txn_balance");
         let mut txn = OccRemote::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
+            self.tid,
             cid, 
             &self.memdb, 
             &self.scheduler,
@@ -129,8 +135,10 @@ impl SmallBankWorker {
 
     // update saving
     pub async fn txn_transact_savings(&self, rand_gen: &mut FastRandom, cid: u32) {
+        println!("txn_transact_savings");
         let mut txn = OccRemote::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
+            self.tid,
             cid, 
             &self.memdb, 
             &self.scheduler,
@@ -160,8 +168,10 @@ impl SmallBankWorker {
 
     // read checing && saving -> write checking
     pub async fn txn_write_check(&self, rand_gen: &mut FastRandom, cid: u32) {
+        println!("txn_write_check");
         let mut txn = OccRemote::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
+            self.tid,
             cid, 
             &self.memdb, 
             &self.scheduler,
@@ -184,7 +194,7 @@ impl SmallBankWorker {
         );
 
         let cv = txn.get_value::<SmallBankChecking>(true, 0).await.c_balance;
-        let sv = txn.get_value::<SmallBankSavings>(false, 1).await.s_balance;
+        let sv = txn.get_value::<SmallBankSavings>(false, 0).await.s_balance;
 
         let total = cv + sv;
 
@@ -204,8 +214,10 @@ impl SmallBankWorker {
 
     // read checing && saving -> write checking
     pub async fn txn_amalgamate(&self, rand_gen: &mut FastRandom, cid: u32) {
+        println!("txn_amalgamate");
         let mut txn = OccRemote::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
+            self.tid,
             cid, 
             &self.memdb, 
             &self.scheduler,

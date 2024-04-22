@@ -20,14 +20,16 @@ use super::super::occ::LockContent;
 use super::super::cache_helpers::CacheReadSetItem;
 
 pub struct BatchRpcProc {
+    pub tid:        u32,
     pub memdb:      Arc<MemDB>,
     pub scheduler:  Arc<AsyncScheduler>,
     // pub trans_view: TransCacheView<'worker>
 }
 
 impl BatchRpcProc {
-    pub fn new(memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
+    pub fn new(tid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
+            tid: tid,
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
             // trans_view: TransCacheView::new(scheduler),
@@ -100,7 +102,7 @@ impl BatchRpcProc {
 
         let req_header = req_wrapper.get_header();
 
-        let lock_content = LockContent::new(meta.peer_id, meta.rpc_cid);
+        let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
 
         for _ in 0..req_header.num {
             let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
@@ -163,7 +165,7 @@ impl BatchRpcProc {
         let req_header = req_wrapper.get_header();
 
         let mut success = true;
-        let lock_content = LockContent::new(meta.peer_id, meta.rpc_cid);
+        let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
 
         for _ in 0..req_header.num {
             let req_item = req_wrapper.get_item::<LockReqItem>();
@@ -301,7 +303,7 @@ impl BatchRpcProc {
 
         let req_header = req_wrapper.get_header();
 
-        let lock_content = LockContent::new(meta.peer_id, meta.rpc_cid);
+        let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
 
         // unlock
         for _ in 0..req_header.num {
@@ -334,7 +336,7 @@ impl BatchRpcProc {
 
         let req_header = req_wrapper.get_header();
 
-        let lock_content = LockContent::new(meta.peer_id, meta.rpc_cid);
+        let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
 
         for _ in 0..req_header.num {
             let req_item = req_wrapper.get_item::<AbortReqItem>();

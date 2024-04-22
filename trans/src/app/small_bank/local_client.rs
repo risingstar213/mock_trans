@@ -1,6 +1,8 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
+use tokio::time::sleep;
+use std::time::Duration;
 
 use crate::common::random::FastRandom;
 
@@ -26,13 +28,13 @@ const fn get_workload_mix_sum() -> usize {
 }
 
 impl SmallBankClient {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             senders: Vec::new(),
         }
     }
 
-    fn add_sender(&mut self, sender: &Arc<Mutex<mpsc::Sender<SmallBankClientReq>>>) {
+    pub fn add_sender(&mut self, sender: &Arc<Mutex<mpsc::Sender<SmallBankClientReq>>>) {
         self.senders.push(sender.clone());
     }
 
@@ -51,12 +53,18 @@ impl SmallBankClient {
             d -= SMALL_BANK_WORKLOAD_MIX[i];
         }
 
-        self.senders[tx_idx].lock().unwrap().send(SmallBankClientReq{
+        self.senders[tid].lock().unwrap().send(SmallBankClientReq{
             workload: SmallBankWordLoadId::from(tx_idx),
         }).await.unwrap();
     }
 
-    async fn work_loop(&self, rand_seed: usize) {
+    pub async fn work_loop(&self, rand_seed: usize) {
+        let mut rand_gen = FastRandom::new(rand_seed);
+        loop {
+            self.send_workload(&mut rand_gen).await;
+
+            sleep(Duration::from_millis(1)).await;
+        }
 
     }
 }

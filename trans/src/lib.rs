@@ -1,3 +1,4 @@
+#![feature(get_mut_unchecked)]
 pub mod common;
 
 pub mod rdma;
@@ -61,9 +62,12 @@ const MAIN_ROUTINE_ID: u32 = 0;
 
 /////////////////// Small Bank Wokeloads //////////////
 const SMALL_BANK_NROUTINES: usize = 8;
-const SMALL_BANK_NTHREADS: usize = 4;
+const SMALL_BANK_NTHREADS: usize = 1;
 const SMALL_BANK_NPARTITIONS:  usize = 2;
 const SMALL_BANK_DEFAULT_NACCOUNTS: usize = 1000;
 const SMALL_BANK_DEFAULT_NHOTACCOUTS: usize = 40;
 const SMALL_BANK_SCALE: usize = 1;
 const SMALL_BANK_TX_HOT: usize = 90;
+
+const SMALL_BANK_MIN_BALANCE: f64 = 10000.0;
+const SMALL_BANK_MAX_BALANCE: f64 = 50000.0;

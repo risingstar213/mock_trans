@@ -15,6 +15,7 @@ pub struct OccRemote<const MAX_ITEM_SIZE: usize>
 {
     status:    OccStatus,
     part_id:   u64,
+    tid:       u32,
     cid:       u32,
     memdb:     Arc<MemDB>,
     batch_rpc: BatchRpcCtrl,
@@ -26,10 +27,11 @@ pub struct OccRemote<const MAX_ITEM_SIZE: usize>
 // local operations
 impl<const MAX_ITEM_SIZE: usize> OccRemote<MAX_ITEM_SIZE>
 {
-    pub fn new(part_id: u64, cid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
+    pub fn new(part_id: u64, tid: u32, cid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             status:    OccStatus::OccUnint,
             part_id:   part_id,
+            tid:       tid,
             cid:       cid,
             memdb:     memdb.clone(),
             batch_rpc: BatchRpcCtrl::new(scheduler, cid),
@@ -65,7 +67,7 @@ impl<const MAX_ITEM_SIZE: usize> OccRemote<MAX_ITEM_SIZE>
     fn local_fetch_write<T: MemStoreValue>(&mut self, table_id: usize, key: u64) -> usize {
         let update_idx = self.updateset.get_len();
 
-        let lock_content = LockContent::new(self.part_id, self.cid);
+        let lock_content = LockContent::new(self.part_id, self.tid, self.cid);
 
         let mut value = T::default();
         let ptr = &mut value as *mut T as *mut u8;
@@ -222,7 +224,7 @@ impl<const MAX_ITEM_SIZE: usize> OccRemote<MAX_ITEM_SIZE>
             &mut self.writeset
         };
 
-        let lock_content =  LockContent::new(self.part_id, self.cid);
+        let lock_content =  LockContent::new(self.part_id, self.tid, self.cid);
 
         for i in 0..ref_set.get_len() {
             let item = ref_set.bucket(i);
@@ -253,7 +255,7 @@ impl<const MAX_ITEM_SIZE: usize> OccRemote<MAX_ITEM_SIZE>
             &mut self.writeset
         };
 
-        let lock_content =  LockContent::new(self.part_id, self.cid);
+        let lock_content =  LockContent::new(self.part_id, self.tid, self.cid);
 
         for i in 0..ref_set.get_len() {
             let item = ref_set.bucket(i);
@@ -353,7 +355,7 @@ impl<const MAX_ITEM_SIZE: usize> OccRemote<MAX_ITEM_SIZE>
     async fn lock_writes(&mut self) {
         self.batch_rpc.restart_batch();
 
-        let lock_content = LockContent::new(self.part_id, self.cid);
+        let lock_content = LockContent::new(self.part_id, self.tid,  self.cid);
         for i in 0..self.writeset.get_len() {
             let item = self.writeset.bucket(i);
             if item.part_id == self.part_id {

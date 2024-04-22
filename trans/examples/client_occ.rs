@@ -44,6 +44,7 @@ impl OccCtrlWorker {
     async fn prepare_data(&self) {
         let mut occ1 = OccRemote::<8>::new(
             0, 
+            0,
             1, 
             &self.memdb,
             &self.scheduler,
@@ -66,6 +67,7 @@ impl OccCtrlWorker {
 
         let mut occ2 = OccRemote::<8>::new(
             0, 
+            0,
             1, 
             &self.memdb,
             &self.scheduler,
@@ -85,6 +87,7 @@ impl OccCtrlWorker {
 
     async fn test_conflicts(&self) {
         let mut occ1 = OccRemote::<8>::new(
+            0,
             0, 
             1, 
             &self.memdb,
@@ -94,6 +97,7 @@ impl OccCtrlWorker {
 
         let mut occ2 = OccRemote::<8>::new(
             0, 
+            0,
             2, 
             &self.memdb,
             &self.scheduler,
@@ -122,6 +126,7 @@ impl OccCtrlWorker {
 
         let mut occ3 = OccRemote::<8>::new(
             0, 
+            0,
             1, 
             &self.memdb,
             &self.scheduler,
@@ -165,7 +170,7 @@ async fn main() {
     rdma.connect(1, "10.10.10.6\0", "7472\0").unwrap();
 
     let allocator = rdma.get_allocator();
-    let mut scheduler = Arc::new(AsyncScheduler::new(3, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new(0, 3, &allocator));
 
     let conn = rdma.get_connection(1);
     conn.lock().unwrap().init_and_start_recvs().unwrap();

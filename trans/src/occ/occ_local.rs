@@ -38,7 +38,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<MAX_ITEM_SIZE>
             return;
         }
 
-        let lock_content = LockContent::new(0, self.cid);
+        let lock_content = LockContent::new(0, 0, self.cid);
 
         for i in 0..self.writeset.get_len() {
             let item = self.writeset.bucket(i);
@@ -114,7 +114,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<MAX_ITEM_SIZE>
             return;
         }
 
-        let lock_content = LockContent::new(0, self.cid);
+        let lock_content = LockContent::new(0, 0, self.cid);
 
         for i in 0..self.updateset.get_len() {
             let item = self.updateset.bucket(i);
@@ -132,7 +132,7 @@ impl<'trans, const MAX_ITEM_SIZE: usize> OccLocal<MAX_ITEM_SIZE>
             return;
         }
 
-        let lock_content = LockContent::new(0, self.cid);
+        let lock_content = LockContent::new(0, 0, self.cid);
 
         for i in 0..self.updateset.get_len() {
             let item = self.updateset.bucket(i);
@@ -187,7 +187,7 @@ impl< const MAX_ITEM_SIZE: usize> OccLocal< MAX_ITEM_SIZE>
         // local
         assert_eq!(part_id, 0);
 
-        let lock_content = LockContent::new(0, self.cid);
+        let lock_content = LockContent::new(0, 0, self.cid);
 
         let mut value = T::default();
         let ptr = &mut value as *mut T as *mut u8;
@@ -215,7 +215,7 @@ impl< const MAX_ITEM_SIZE: usize> OccLocal< MAX_ITEM_SIZE>
         // local
         assert_eq!(part_id, 0);
 
-        let lock_content = LockContent::new(0, self.cid);
+        let lock_content = LockContent::new(0, 0, self.cid);
 
         let value = T::default();
 
