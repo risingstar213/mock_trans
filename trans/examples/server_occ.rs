@@ -66,7 +66,7 @@ impl RpcHandler for OccProcWorker {
                 self.proc.commit_cache_rpc_handler(src_conn, msg, size, meta);
             }
             occ_rpc_id::RELEASE_RPC => {
-                self.proc.read_cache_rpc_handler(src_conn, msg, size, meta);
+                self.proc.release_cache_rpc_handler(src_conn, msg, size, meta);
             }
             occ_rpc_id::ABORT_RPC => {
                 self.proc.abort_cache_rpc_handler(src_conn, msg, size, meta);

@@ -137,6 +137,7 @@ impl TransCacheView {
             return;
         }
         self.trans_read_map.lock().unwrap().insert(key.clone(), Vec::new());
+        self.alloc_read_buf(key);
     }
 
     #[inline]
@@ -145,6 +146,7 @@ impl TransCacheView {
             return;
         }
         self.trans_write_map.lock().unwrap().insert(key.clone(), Vec::new());
+        self.alloc_write_buf(key);
     }
 
     #[inline]
@@ -360,10 +362,6 @@ impl TransCacheView {
         let mut read_map = self.trans_read_map.lock().unwrap();
         let read_vec = read_map.get_mut(key).unwrap();
 
-        if read_vec.len() == 0 {
-            self.alloc_read_buf(key);
-        }
-
         let idx = read_vec.len() - 1;
         
         ReadCacheMetaWriter::new(key, cid, read_vec.get(idx).unwrap())
@@ -437,10 +435,6 @@ impl TransCacheView {
     pub fn new_write_cache_writer(&self, key: &TransKey, cid: u32) -> WriteCacheMetaWriter {
         let mut write_map = self.trans_write_map.lock().unwrap();
         let write_vec = write_map.get_mut(key).unwrap();
-
-        if write_vec.len() == 0 {
-            self.alloc_write_buf(key);
-        }
 
         let idx = write_vec.len() - 1;
         
