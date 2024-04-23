@@ -23,7 +23,7 @@ pub struct BatchRpcProc {
     pub tid:        u32,
     pub memdb:      Arc<MemDB>,
     pub scheduler:  Arc<AsyncScheduler>,
-    // pub trans_view: TransCacheView<'worker>
+    pub trans_view: TransCacheView
 }
 
 impl BatchRpcProc {
@@ -32,7 +32,7 @@ impl BatchRpcProc {
             tid: tid,
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
-            // trans_view: TransCacheView::new(scheduler),
+            trans_view: TransCacheView::new(scheduler),
         }
     }
 }
@@ -111,7 +111,7 @@ impl BatchRpcProc {
             let meta = self.memdb.local_get_for_upd(
                 req_item.table_id, 
                 req_item.key, 
-                resp_wrapper.get_extra_data_raw_ptr::<FetchWriteReqItem>(), 
+                resp_wrapper.get_extra_data_raw_ptr::<FetchWriteRespItem>(), 
                 data_len as u32, 
                 lock_content.to_content()
             ).unwrap();
@@ -367,102 +367,177 @@ impl BatchRpcProc {
 }
 
 impl BatchRpcProc {
-    // pub fn read_cache_rpc_handler(
-    //     &self,
-    //     src_conn: &mut RdmaRcConn,
-    //     msg: *mut u8,
-    //     size: u32,
-    //     meta: RpcProcessMeta
-    // ) {
-    //     let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
-    //     let resp_buf = self.scheduler.get_reply_buf();
-    //     let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
+    pub fn read_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
+        let resp_buf = self.scheduler.get_reply_buf(0);
+        let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
         
-    //     let trans_key = TransKey::new(&meta);
-    //     self.trans_view.start_read_trans(&trans_key);
-    //     let mut read_cache_writer = self.trans_view.new_read_cache_writer(&trans_key, MAIN_ROUTINE_ID);
+        let trans_key = TransKey::new(self.tid, &meta);
+        self.trans_view.start_read_trans(&trans_key);
+        let mut read_cache_writer = self.trans_view.new_read_cache_writer(&trans_key, MAIN_ROUTINE_ID);
 
-    //     let req_header = req_wrapper.get_header();
+        let req_header = req_wrapper.get_header();
 
-    //     for _ in 0..req_header.num {
-    //         let req_item = req_wrapper.get_item::<ReadReqItem>();
-    //         let data_len = self.memdb.get_item_length(req_item.table_id);
+        for _ in 0..req_header.num {
+            let req_item = req_wrapper.get_item::<ReadReqItem>();
+            let data_len = self.memdb.get_item_length(req_item.table_id);
 
-    //         let meta = self.memdb.local_get_readonly(
-    //             req_item.table_id, 
-    //             req_item.key, 
-    //             resp_wrapper.get_extra_data_raw_ptr::<ReadRespItem>(), 
-    //             data_len as u32,
-    //         ).unwrap();
+            let meta = self.memdb.local_get_readonly(
+                req_item.table_id, 
+                req_item.key, 
+                resp_wrapper.get_extra_data_raw_ptr::<ReadCacheRespItem>(), 
+                data_len as u32,
+            ).unwrap();
 
-    //         resp_wrapper.set_item(ReadRespItem{
-    //             read_idx: req_item.read_idx,
-    //             seq:      meta.seq as u64,
-    //             length:   data_len,
-    //         });
+            resp_wrapper.set_item(ReadCacheRespItem{
+                read_idx: req_item.read_idx,
+                length:   data_len,
+            });
 
-    //         read_cache_writer.block_append_item(&self.trans_view, CacheReadSetItem{
-    //             table_id: req_item.table_id, 
-    //             key:      req_item.key,
-    //             old_seq:  meta.seq as u64,
-    //         });
+            read_cache_writer.block_append_item(&self.trans_view, CacheReadSetItem{
+                table_id: req_item.table_id, 
+                key:      req_item.key,
+                old_seq:  meta.seq as u64,
+            });
 
-    //         req_wrapper.shift_to_next_item::<ReadReqItem>(0);
-    //         resp_wrapper.shift_to_next_item::<ReadRespItem>(data_len);
-    //     }
+            req_wrapper.shift_to_next_item::<ReadReqItem>(0);
+            resp_wrapper.shift_to_next_item::<ReadCacheRespItem>(data_len);
+        }
 
-    //     read_cache_writer.block_sync_buf(&self.trans_view);
+        read_cache_writer.block_sync_buf(&self.trans_view);
 
-    //     resp_wrapper.set_header(BatchRpcRespHeader {
-    //         write: false,
-    //         num: req_header.num,
-    //     });
+        resp_wrapper.set_header(BatchRpcRespHeader {
+            write: false,
+            num: req_header.num,
+        });
 
-    //     self.scheduler.send_reply(
-    //         src_conn, 
-    //         resp_buf, 
-    //         occ_rpc_id::READ_RPC, 
-    //         resp_wrapper.get_off() as _, 
-    //         meta.rpc_cid, 
-    //         meta.peer_id, 
-    //         meta.peer_tid
-    //     );
-    // }
+        self.scheduler.send_reply(
+            src_conn, 
+            resp_buf, 
+            occ_rpc_id::READ_RPC, 
+            resp_wrapper.get_off() as _, 
+            meta.rpc_cid, 
+            meta.peer_id, 
+            meta.peer_tid
+        );
+    }
 
-    // pub fn validate_cache_rpc_handler(
-    //     &self,
-    //     src_conn: &mut RdmaRcConn,
-    //     msg: *mut u8,
-    //     size: u32,
-    //     meta: RpcProcessMeta
-    // ) {
-    //     let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
-    //     let resp_buf = self.scheduler.get_reply_buf();
+    pub fn fetch_write_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
+        let resp_buf = self.scheduler.get_reply_buf(0);
+        let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
 
-    //     let req_header = req_wrapper.get_header();
+        let req_header = req_wrapper.get_header();
 
-    //     let mut success = true;      
-    //     for _ in 0..req_header.num {
-    //         let req_item = req_wrapper.get_item::<ValidateReqItem>();
+        let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
 
-    //         let meta = self.memdb.local_get_meta(
-    //             req_item.table_id, 
-    //             req_item.key
-    //         ).unwrap();
+        for _ in 0..req_header.num {
+            let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
+            let mut data_len = self.memdb.get_item_length(req_item.table_id);
 
-    //         if meta.lock != 0 || (meta.seq != req_item.old_seq) {
-    //             success = false;
-    //             break;
-    //         }
+            let meta = self.memdb.local_get_for_upd(
+                req_item.table_id, 
+                req_item.key, 
+                resp_wrapper.get_extra_data_raw_ptr::<FetchWriteReqItem>(), 
+                data_len as u32, 
+                lock_content.to_content()
+            ).unwrap();
 
-    //         req_wrapper.shift_to_next_item::<ValidateReqItem>(0);
-    //     }
+            if meta.lock != lock_content.to_content() {
+                data_len = 0;
+                resp_wrapper.set_item(FetchWriteRespItem{
+                    update_idx: req_item.update_idx,
+                    seq: 0,
+                    length: 0,
+                });
+            } else {
+                resp_wrapper.set_item(FetchWriteRespItem{
+                    update_idx: req_item.update_idx,
+                    seq: meta.seq,
+                    length: data_len,
+                })
+            }
 
-    //     // blocking send the request
-    //     self.sender.as_ref().unwrap().blocking_send(YieldReq{
-    //         yield_rpc_id: occ_rpc_id::READ_CACHE_RPC,
-    //         yield_meta: meta,
-    //         addi_success: success,
-    //     }).unwrap();
-    // }
+            req_wrapper.shift_to_next_item::<FetchWriteReqItem>(0);
+            resp_wrapper.shift_to_next_item::<FetchWriteRespItem>(data_len);
+        }
+
+        resp_wrapper.set_header(BatchRpcRespHeader {
+            write: true,
+            num: req_header.num,
+        });
+
+        self.scheduler.send_reply(
+            src_conn, 
+            resp_buf, 
+            occ_rpc_id::FETCHWRITE_RPC, 
+            resp_wrapper.get_off() as _, 
+            meta.rpc_cid, 
+            meta.peer_id, 
+            meta.peer_tid
+        );
+
+    }
+
+    pub fn validate_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        let resp_buf = self.scheduler.get_reply_buf(0);
+
+        let trans_key = TransKey::new(self.tid, &meta);
+        let buf_count = self.trans_view.get_read_range_num(&trans_key);
+
+        let mut success = true;
+        
+        for i in 0..buf_count {
+            let read_buf = self.trans_view.block_get_read_buf(&trans_key, i, meta.rpc_cid);
+
+            for item in read_buf.iter() {
+                let meta = self.memdb.local_get_meta(
+                    item.table_id, 
+                    item.key
+                ).unwrap();
+    
+                if meta.lock != 0 || (meta.seq != item.old_seq) {
+                    success = false;
+                    break;
+                }
+            }
+        }
+
+        self.trans_view.end_read_trans(&trans_key);
+
+        let reduce_resp = unsafe { (resp_buf as *mut BatchRpcReduceResp).as_mut().unwrap() };
+        *reduce_resp = BatchRpcReduceResp{
+            success: success
+        };
+
+        self.scheduler.send_reply(
+            src_conn, 
+            resp_buf, 
+            occ_rpc_id::VALIDATE_RPC, 
+            std::mem::size_of::<BatchRpcReduceResp>() as _, 
+            meta.rpc_cid, 
+            meta.peer_id, 
+            meta.peer_tid
+        );
+    }
+
+
 }

@@ -63,6 +63,13 @@ pub struct ReadRespItem {
 
 #[repr(C)]
 #[derive(Clone)]
+pub struct ReadCacheRespItem {
+    pub(crate) read_idx: usize,
+    pub(crate) length:   usize,
+}
+
+#[repr(C)]
+#[derive(Clone)]
 pub struct FetchWriteReqItem {
     pub(crate) table_id:   usize,
     pub(crate) key:        u64,
@@ -72,6 +79,14 @@ pub struct FetchWriteReqItem {
 #[repr(C)]
 #[derive(Clone)]
 pub struct FetchWriteRespItem {
+    pub(crate) update_idx: usize,
+    pub(crate) seq:        u64,
+    pub(crate) length:     usize,
+}
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct FetchWriteCacheRespItem {
     pub(crate) update_idx: usize,
     pub(crate) seq:        u64,
     pub(crate) length:     usize,
