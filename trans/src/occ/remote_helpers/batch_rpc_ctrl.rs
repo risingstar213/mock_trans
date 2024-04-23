@@ -89,7 +89,7 @@ impl BatchRpcCtrl
             return;
         }
 
-        let resp_buf = self.scheduler.get_reply_buf();
+        let resp_buf = self.scheduler.get_reply_buf(self.cid);
         self.resp_buf = Some(resp_buf as usize);
 
         self.scheduler.prepare_multi_replys(self.cid, resp_buf, self.req_msgs.len() as u32);

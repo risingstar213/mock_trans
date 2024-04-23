@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
 use tokio::time::sleep;
-use std::time::Duration;
+use std::time::{ Duration, SystemTime };
 
 use crate::common::random::FastRandom;
 
@@ -59,11 +59,19 @@ impl SmallBankClient {
     }
 
     pub async fn work_loop(&self, rand_seed: usize) {
+        let mut count = 0;
+        let start_time = SystemTime::now();
         let mut rand_gen = FastRandom::new(rand_seed);
         loop {
             self.send_workload(&mut rand_gen).await;
+            count += 1;
 
-            sleep(Duration::from_millis(1)).await;
+            if count % 10000 == 0 {
+                let now_time = SystemTime::now();
+                let duration = now_time.duration_since(start_time).unwrap();
+                println!("{}, {}", count, duration.as_millis());
+            }
+            // sleep(Duration::from_millis(1)).await;
         }
 
     }

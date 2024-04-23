@@ -40,7 +40,7 @@ impl AskServerWorker {
 
 impl AskServerWorker {
     async fn work_routine(&self, cid: u32) {
-        let reply_buf = self.scheduler.get_reply_buf() as usize;
+        let reply_buf = self.scheduler.get_reply_buf(cid) as usize;
         self.scheduler.prepare_multi_replys(cid, reply_buf as _, 10);
 
         for i in 0..10 {

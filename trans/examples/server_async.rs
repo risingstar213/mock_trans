@@ -52,7 +52,7 @@ impl AnswerClientWorker {
         println!("get add request {:} {:}", a, b);
 
         let size = std::mem::size_of::<AddResponse>();
-        let addr = self.scheduler.get_reply_buf();
+        let addr = self.scheduler.get_reply_buf(0);
         unsafe {
             (*(addr as *mut AddResponse)).sum = a + b;
         }

@@ -215,11 +215,11 @@ impl RdmaRecvCallback for AsyncScheduler {
 }
 
 impl AsyncRpc for AsyncScheduler {
-    fn get_reply_buf(&self) -> *mut u8 {
+    fn get_reply_buf(&self, cid: u32) -> *mut u8 {
         // std::ptr::null_mut()
         // let layout = Layout::from_size_align(MAX_RESP_SIZE, std::mem::align_of::<usize>()).unwrap();
         // let buf = unsafe { self.allocator.alloc(layout) };
-        let buf = self.allocator.lock().unwrap().get_reply_buf();
+        let buf = self.allocator.lock().unwrap().get_reply_buf(cid);
         unsafe { buf.add(4) }
     }
 

@@ -46,7 +46,7 @@ impl BatchRpcProc {
         meta: RpcProcessMeta
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
-        let resp_buf = self.scheduler.get_reply_buf();
+        let resp_buf = self.scheduler.get_reply_buf(0);
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
 
         let req_header = req_wrapper.get_header();
@@ -97,7 +97,7 @@ impl BatchRpcProc {
         meta: RpcProcessMeta
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
-        let resp_buf = self.scheduler.get_reply_buf();
+        let resp_buf = self.scheduler.get_reply_buf(0);
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
 
         let req_header = req_wrapper.get_header();
@@ -160,7 +160,7 @@ impl BatchRpcProc {
         meta: RpcProcessMeta
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
-        let resp_buf = self.scheduler.get_reply_buf();
+        let resp_buf = self.scheduler.get_reply_buf(0);
 
         let req_header = req_wrapper.get_header();
 
@@ -209,7 +209,7 @@ impl BatchRpcProc {
         meta: RpcProcessMeta
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
-        let resp_buf = self.scheduler.get_reply_buf();
+        let resp_buf = self.scheduler.get_reply_buf(0);
 
         let req_header = req_wrapper.get_header();
 
@@ -254,7 +254,7 @@ impl BatchRpcProc {
         meta: RpcProcessMeta
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
-        let resp_buf = self.scheduler.get_reply_buf();
+        let resp_buf = self.scheduler.get_reply_buf(0);
 
         let req_header = req_wrapper.get_header();
 
@@ -299,7 +299,7 @@ impl BatchRpcProc {
         meta: RpcProcessMeta
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
-        let resp_buf = self.scheduler.get_reply_buf();
+        let resp_buf = self.scheduler.get_reply_buf(0);
 
         let req_header = req_wrapper.get_header();
 
@@ -332,7 +332,7 @@ impl BatchRpcProc {
         meta: RpcProcessMeta
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
-        let resp_buf = self.scheduler.get_reply_buf();
+        let resp_buf = self.scheduler.get_reply_buf(0);
 
         let req_header = req_wrapper.get_header();
 

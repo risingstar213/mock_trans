@@ -293,6 +293,10 @@ impl<const MAX_ITEM_SIZE: usize> OccRemote<MAX_ITEM_SIZE>
             let item = wrapper.get_item::<ReadRespItem>();
             let raw_data = wrapper.get_extra_data_const_ptr::<ReadRespItem>();
 
+            if item.read_idx >= self.readset.get_len() {
+                println!("read length overflow???, cid:{}, num:{}", self.cid, num);
+            }
+
             let bucket = self.readset.bucket(item.read_idx);
 
             bucket.seq = item.seq;
@@ -311,6 +315,10 @@ impl<const MAX_ITEM_SIZE: usize> OccRemote<MAX_ITEM_SIZE>
             if item.length == 0 && item.seq == 0 {
                 self.status = OccStatus::OccMustabort;
                 break;
+            }
+
+            if item.update_idx >= self.updateset.get_len() {
+                println!("update length overflow???, cid:{}, num:{}", self.cid, num);
             }
 
             let bucket = self.updateset.bucket(item.update_idx);

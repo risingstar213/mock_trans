@@ -110,7 +110,28 @@ where
     }
 
     fn local_lock(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta> {
-        let ret: Option<MemNodeMeta>;
+        let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
+
+        let mut need_insert = false;
+        self.table.rlock();
+
+        match self.table.get(key) {
+            Some(node) => {
+                node.try_lock(lock_content);
+                ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
+            }
+            None => {
+                need_insert = true;
+            }
+        }
+
+        self.table.runlock();
+
+        if !need_insert {
+            return ret;
+        }
+
+        println!("insert key: {}", key);
 
         self.table.wlock();
 

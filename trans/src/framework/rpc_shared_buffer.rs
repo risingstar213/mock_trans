@@ -7,6 +7,7 @@ use crate::{MAX_INFLIGHT_REPLY, MAX_INFLIGHT_REQS_PER_ROUTINE, MAX_REQ_SIZE, MAX
 
 // reused buffer for rpc
 pub struct RpcBufAllocator {
+    coroutine_num: u32,
     req_buf_pool: Vec<Vec<*mut u8>>,
     req_heads: Vec<u32>,
     reply_buf_pool: Vec<*mut u8>,
@@ -41,21 +42,26 @@ impl RpcBufAllocator {
         }
 
         Self {
+            coroutine_num: coroutine_num,
             req_buf_pool: req_bufs,
             req_heads: req_heads,
             reply_buf_pool: reply_bufs,
-            reply_heads: 0,
+            reply_heads: coroutine_num,
         }
     }
 
-    pub fn get_reply_buf(&mut self) -> *mut u8 {
+    pub fn get_reply_buf(&mut self, cid: u32) -> *mut u8 {
+        // 目前工作协程只会用到一个 reply buf, 因此不参与循环以减少冲突的可能性
+        if cid != 0 {
+            return self.reply_buf_pool[cid as usize];
+        }
         let buf = *self
             .reply_buf_pool
             .get::<usize>(self.reply_heads as _)
             .unwrap();
         self.reply_heads += 1;
         if self.reply_heads >= MAX_INFLIGHT_REPLY as u32 {
-            self.reply_heads = 0;
+            self.reply_heads = self.coroutine_num;
         }
         buf
     }

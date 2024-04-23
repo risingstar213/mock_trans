@@ -1,6 +1,9 @@
 use byte_struct::*;
 use std::cell::{Cell, UnsafeCell};
 use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::RwLock;
+use std::time::SystemTime;
+use std::time::Duration;
 
 use super::super::memstore::{MemNode, MemStoreValue};
 use super::robinhood::RobinHood;
@@ -41,22 +44,33 @@ where
     }
     
     pub fn rlock(&self) {
+        let start_time = SystemTime::now();
         loop {
-            let old = self.rwlock.load(Ordering::Acquire);
+
+            let old = self.rwlock.load(Ordering::SeqCst);
             let mut meta = VersionRwLock::from_raw(old);
+
+            let now_time = SystemTime::now();
+            let duration = now_time.duration_since(start_time).unwrap();
+            if duration.as_millis() > 1000 && duration.as_millis() % 1000 == 0 {
+                println!("read may be dead lock! read:{}, write:{}", meta.read_flag, meta.write_flag);
+            }
 
             if meta.write_flag == 0 {
                 meta.read_flag += 1;
                 meta.version += 1;
+                if meta.version >= 1 << 20 {
+                    meta.version = 0;
+                }
 
                 match self.rwlock.compare_exchange(
                     old,
                     meta.to_raw(),
-                    Ordering::Release,
+                    Ordering::SeqCst,
                     Ordering::Relaxed,
                 ) {
                     Ok(_) => {
-                        return;
+                        break;
                     }
                     Err(_) => {
                         continue;
@@ -68,7 +82,7 @@ where
 
     pub fn runlock(&self) {
         loop {
-            let old = self.rwlock.load(Ordering::Acquire);
+            let old = self.rwlock.load(Ordering::SeqCst);
             let mut meta = VersionRwLock::from_raw(old);
 
             if meta.write_flag != 0 {
@@ -77,11 +91,14 @@ where
 
             meta.read_flag -= 1;
             meta.version += 1;
+            if meta.version >= 1 << 20 {
+                meta.version = 0;
+            }
 
             match self.rwlock.compare_exchange(
                 old,
                 meta.to_raw(),
-                Ordering::Release,
+                Ordering::SeqCst,
                 Ordering::Relaxed,
             ) {
                 Ok(_) => {
@@ -95,22 +112,32 @@ where
     }
 
     pub fn wlock(&self) {
+        let start_time = SystemTime::now();
         loop {
-            let old = self.rwlock.load(Ordering::Acquire);
+            let old = self.rwlock.load(Ordering::SeqCst);
             let mut meta = VersionRwLock::from_raw(old);
+
+            let now_time = SystemTime::now();
+            let duration = now_time.duration_since(start_time).unwrap();
+            if duration.as_millis() > 1000 && duration.as_millis() % 1000 == 0 {
+                println!("write may be dead lock!");
+            }
 
             if meta.read_flag == 0 {
                 meta.write_flag = 1;
                 meta.version += 1;
+                if meta.version >= 1 << 20 {
+                    meta.version = 0;
+                }
 
                 match self.rwlock.compare_exchange(
                     old,
                     meta.to_raw(),
-                    Ordering::Release,
+                    Ordering::SeqCst,
                     Ordering::Relaxed,
                 ) {
                     Ok(_) => {
-                        return;
+                        break;
                     }
                     Err(_) => {
                         continue;
@@ -118,11 +145,13 @@ where
                 }
             }
         }
+
+        println!("wlock !!!");
     }
 
     pub fn wunlock(&self) {
         loop {
-            let old = self.rwlock.load(Ordering::Acquire);
+            let old = self.rwlock.load(Ordering::SeqCst);
             let mut meta = VersionRwLock::from_raw(old);
 
             if meta.read_flag != 0 {
@@ -131,11 +160,14 @@ where
 
             meta.write_flag = 0;
             meta.version += 1;
+            if meta.version >= 1 << 20 {
+                meta.version = 0;
+            }
 
             match self.rwlock.compare_exchange(
                 old,
                 meta.to_raw(),
-                Ordering::Release,
+                Ordering::SeqCst,
                 Ordering::Relaxed,
             ) {
                 Ok(_) => {
