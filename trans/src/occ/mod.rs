@@ -5,6 +5,7 @@ mod cache_helpers;
 
 pub mod occ_local;
 pub mod occ_remote;
+pub mod occ_trans_cache;
 
 pub use remote_helpers::batch_rpc_proc::BatchRpcProc;
 pub use remote_helpers::occ_rpc_id;

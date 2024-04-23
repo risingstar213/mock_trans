@@ -9,7 +9,7 @@ use trans::memstore::{MemStoreValue, RobinhoodMemStore};
 use trans::framework::scheduler::AsyncScheduler;
 use trans::framework::worker::AsyncWorker;
 
-use trans::occ::occ_remote::OccRemote;
+use trans::occ::occ_trans_cache::OccTransCache;
 use trans::occ::RwType;
 
 #[repr(C)]
@@ -42,7 +42,7 @@ impl OccCtrlWorker {
 
 impl OccCtrlWorker {
     async fn prepare_data(&self) {
-        let mut occ1 = OccRemote::<8>::new(
+        let mut occ1 = OccTransCache::<8>::new(
             0, 
             0,
             1, 
@@ -65,7 +65,7 @@ impl OccCtrlWorker {
 
         assert_eq!(occ1.is_commited(), true);
 
-        let mut occ2 = OccRemote::<8>::new(
+        let mut occ2 = OccTransCache::<8>::new(
             0, 
             0,
             1, 
@@ -86,7 +86,7 @@ impl OccCtrlWorker {
     }
 
     async fn test_conflicts(&self) {
-        let mut occ1 = OccRemote::<8>::new(
+        let mut occ1 = OccTransCache::<8>::new(
             0,
             0, 
             1, 
@@ -95,7 +95,7 @@ impl OccCtrlWorker {
         );
         occ1.start();
 
-        let mut occ2 = OccRemote::<8>::new(
+        let mut occ2 = OccTransCache::<8>::new(
             0, 
             0,
             2, 
@@ -124,7 +124,7 @@ impl OccCtrlWorker {
         occ1.commit().await;
         assert_eq!(occ1.is_commited(), true);
 
-        let mut occ3 = OccRemote::<8>::new(
+        let mut occ3 = OccTransCache::<8>::new(
             0, 
             0,
             1, 
@@ -186,16 +186,6 @@ async fn main() {
 
     let worker = Arc::new(OccCtrlWorker::new(&memdb, &scheduler));
     // scheduler.register_callback(&worker);
-
-    std::thread::spawn(move || {
-        tokio::runtime::Builder::new_multi_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-            .block_on(async {
-            println!("Hello world");
-        })
-    });
 
     {
         let worker1 = worker.clone();

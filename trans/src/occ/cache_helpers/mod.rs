@@ -14,4 +14,5 @@ pub struct CacheReadSetItem {
 pub struct CacheWriteSetItem {
     pub(crate) table_id: usize,
     pub(crate) key:      u64,
+    pub(crate) insert:   bool,
 }

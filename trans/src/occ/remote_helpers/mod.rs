@@ -40,9 +40,6 @@ pub mod occ_rpc_id {
     pub const COMMIT_RPC:      Type = 5;
     pub const RELEASE_RPC:     Type = 6;
     pub const ABORT_RPC:       Type = 7;
-    pub const READ_CACHE_RPC:  Type = 8;
-    pub const VAL_CACHE_RPC:   Type = 9;
-    pub const COMMIT_LAZY_RPC: Type = 10;
 }
 
 #[repr(C)]
@@ -88,7 +85,6 @@ pub struct FetchWriteRespItem {
 #[derive(Clone)]
 pub struct FetchWriteCacheRespItem {
     pub(crate) update_idx: usize,
-    pub(crate) seq:        u64,
     pub(crate) length:     usize,
 }
 
@@ -117,6 +113,12 @@ pub struct CommitReqItem {
 
 #[repr(C)]
 #[derive(Clone)]
+pub struct CommitCacheReqItem {
+    pub(crate) length:   u32, // flexible length, zero means erase
+}
+
+#[repr(C)]
+#[derive(Clone)]
 pub struct ReleaseReqItem {
     pub(crate) table_id: usize,
     pub(crate) key:      u64,
@@ -129,6 +131,10 @@ pub struct AbortReqItem {
     pub(crate) key:      u64,
     pub(crate) insert:   bool,
 }
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct DummyReqItem {}
 
 // pub struct YieldReq {
 //     yield_rpc_id: occ_rpc_id::Type,
