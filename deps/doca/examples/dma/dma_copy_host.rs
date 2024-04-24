@@ -59,7 +59,7 @@ fn main() {
     // populate the buffer into the mmap
     local_mmap_ref.set_memrange(src_raw).unwrap();
 
-    local_mmap_ref.set_permission(ffi::doca_access_flags::DOCA_ACCESS_DPU_READ_ONLY).unwrap();
+    local_mmap_ref.set_permission(ffi::doca_access_flags::DOCA_ACCESS_DPU_READ_ONLY.0).unwrap();
 
     local_mmap_ref.start().unwrap();
 

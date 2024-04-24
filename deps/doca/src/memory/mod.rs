@@ -355,7 +355,7 @@ mod tests {
 
         // populate the buffer into the mmap
         doca_mmap.set_memrange(mr).unwrap();
-        doca_mmap.set_permission(doca_access_flags::DOCA_ACCESS_DPU_READ_ONLY.0).unwrap();
+        doca_mmap.set_permission(ffi::doca_access_flags::DOCA_ACCESS_DPU_READ_ONLY.0).unwrap();
 
         doca_mmap.start().unwrap();
 

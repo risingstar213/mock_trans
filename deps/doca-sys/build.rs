@@ -8,6 +8,7 @@ fn main() {
         arch
     );
     println!("cargo:rustc-link-lib=doca_dma");
+    println!("cargo:rustc-link-lib=doca_comm_channel");
     println!("cargo:rustc-link-lib=doca_common");
 
     // Tell cargo to invalidate the built crate whenever the wrapper changes
@@ -53,6 +54,9 @@ fn main() {
         .allowlist_type("doca_dma_.*")
         .allowlist_function("doca_dma_.*")
         .allowlist_type("doca_pci_bdf")
+        // DOCA_COMM_CHAN part
+        .allowlist_type("doca_comm_channel_.*")
+        .allowlist_function("doca_comm_channel_.*")
         .derive_default(true)
         .derive_debug(true)
         .prepend_enum_name(false)

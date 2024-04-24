@@ -49,6 +49,8 @@ pub mod device;
 pub mod dma;
 pub mod memory;
 
+pub mod comm_chan;
+
 /// Error type
 pub type DOCAError = doca_error;
 

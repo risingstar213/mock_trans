@@ -18,6 +18,14 @@ path = "examples/dma/dma_copy_host.rs"
 name = "dma_copy_dpu"
 path = "examples/dma/dma_copy_dpu.rs"
 
+[[example]]
+name = "dpu_comm"
+path = "examples/comm_chann/dpu_comm.rs"
+
+[[example]]
+name = "host_comm"
+path = "examples/comm_chann/host_comm.rs"
+
 [dependencies]
 ffi = { path = "../doca-sys", package = "doca-sys", version = "0.1.0" }
 page_size = "0.5.0"
