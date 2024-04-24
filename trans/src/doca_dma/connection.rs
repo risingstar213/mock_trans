@@ -15,8 +15,9 @@ use crate::{DOCA_WORKQ_DEPTH, MAX_DMA_BUF_REMOTE, MAX_DMA_BUF_SIZE, MAX_DMA_BUF_
 use super::process_helpers::{ recv_doca_config, load_doca_config };
 use super::export_helpers::send_doca_config;
 
-use super::dma_shared_buffer::{ DmaLocalBuf, DmaLocalBufAllocator };
-use super::dma_shared_buffer::{ DmaRemoteBuf, DmaRemoteBufAllocator };
+use super::dma_shared_buffer::DmaLocalBufAllocator;
+use super::dma_shared_buffer::DmaRemoteBufAllocator;
+use super::{ DmaLocalBuf, DmaRemoteBuf };
 
 pub struct DocaDmaControl {
     conn: Option<Arc<Mutex<DocaDmaConn>>>,

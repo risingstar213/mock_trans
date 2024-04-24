@@ -9,7 +9,7 @@ use rdma_sys::*;
 
 use super::rcconn::RdmaRcConn;
 
-use crate::{TransError, TransResult, MAX_RECV_SIZE, MAX_SEND_SIZE, NPAGES, PEERNUMS, PORTS};
+use crate::{TransError, TransResult, MAX_RECV_SIZE, MAX_SEND_SIZE, NPAGES, PEERNUMS};
 
 pub struct RdmaBaseAllocator {
     allocator: LockedHeap,

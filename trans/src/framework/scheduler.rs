@@ -16,6 +16,18 @@ use doca::DOCAError;
 #[cfg(feature = "doca_deps")]
 use crate::doca_dma::connection::DocaDmaConn;
 
+#[cfg(feature = "doca_deps")]
+use crate::doca_comm_chan::connection::DocaCommChannel;
+
+#[cfg(feature = "doca_deps")]
+use crate::doca_comm_chan::connection::{ DocaCommHandler, DEFAULT_DOCA_CONN_HANDLER };
+
+#[cfg(feature = "doca_deps")]
+use crate::doca_comm_chan::conn_buf::DocaConnBuf;
+
+#[cfg(feature = "doca_deps")]
+use crate::doca_comm_chan::doca_conn_info_type;
+
 use super::rpc_shared_buffer::RpcBufAllocator;
 
 use super::rpc::rpc_msg_type;
@@ -77,6 +89,12 @@ pub struct AsyncScheduler {
     dma_conn: Option<Arc<Mutex<DocaDmaConn>>>,
     #[cfg(feature = "doca_deps")]
     dma_meta: Mutex<Vec<DmaMeta>>,
+    #[cfg(feature = "doca_deps")]
+    comm_chan: Option<DocaCommChannel>,
+    #[cfg(feature = "doca_deps")]
+    comm_handler: Weak<dyn DocaCommHandler + Send + Sync + 'static>,
+    #[cfg(feature = "doca_deps")]
+    comm_replys: Mutex<Vec<Option<DocaConnBuf>>>,
 }
 
 // 手动标记 Send + Sync
@@ -87,11 +105,9 @@ impl AsyncScheduler {
     pub fn new(tid: usize, routine_num: u32, allocator: &Arc<RdmaBaseAllocator>) -> Self {
         let mut pendings = Vec::new();
         #[cfg(feature = "doca_deps")]
-        let mut dma_meta = Vec::new();
+        let dma_meta = Vec::new();
         for _ in 0..routine_num {
             pendings.push(0);
-            #[cfg(feature = "doca_deps")]
-            dma_meta.push(DmaMeta(DmaStatus::DmaIdle));
         }
         Self {
             tid: tid,
@@ -107,6 +123,12 @@ impl AsyncScheduler {
             dma_conn: None,
             #[cfg(feature = "doca_deps")]
             dma_meta: Mutex::new(dma_meta),
+            #[cfg(feature = "doca_deps")]
+            comm_chan: None,
+            #[cfg(feature = "doca_deps")]
+            comm_handler: Arc::downgrade(&DEFAULT_DOCA_CONN_HANDLER) as _,
+            #[cfg(feature = "doca_deps")]
+            comm_replys: Mutex::new(Vec::new()),
         }
     }
 
@@ -293,6 +315,10 @@ impl AsyncRpc for AsyncScheduler {
 #[cfg(feature = "doca_deps")]
 impl AsyncScheduler {
     pub fn set_dma_conn(&mut self, dma_conn: &Arc<Mutex<DocaDmaConn>>) {
+        let routine_num = self.pendings.lock().unwrap().len();
+        for _ in 0..routine_num {
+            self.dma_meta.lock().unwrap().push(DmaMeta(DmaStatus::DmaIdle));
+        }
         self.dma_conn = Some(dma_conn.clone());
     }
 
@@ -402,6 +428,72 @@ impl AsyncScheduler {
     pub fn dma_dealloc_remote_buf(&self, buf: DmaRemoteBuf) {
         self.dma_conn.as_ref().unwrap().lock().unwrap().dealloc_remote_buf(buf);
     }
+}
+
+#[cfg(feature = "doca_deps")]
+impl AsyncScheduler {
+    pub fn set_comm_chan(&mut self, chan: DocaCommChannel) {
+        let routine_num = self.pendings.lock().unwrap().len();
+        for _ in 0..routine_num {
+            self.comm_replys.lock().unwrap().push(None);
+        }
+        self.comm_chan = Some(chan)
+    }
+
+    pub fn register_comm_handler(&mut self, handler: &Arc<impl DocaCommHandler + Send + Sync + 'static>) {
+        self.comm_handler = Arc::downgrade(handler) as _;
+    }
+
+    #[inline]
+    pub fn comm_chan_alloc_buf(&self) -> DocaConnBuf {
+        self.comm_chan.as_ref().unwrap().alloc_buf()
+    }
+
+    #[inline]
+    pub fn comm_chan_dealloc_buf(&self, buf: DocaConnBuf) {
+        self.comm_chan.as_ref().unwrap().dealloc_buf(buf);
+    }
+
+    pub fn block_send_info(&self, buf: &mut DocaConnBuf) {
+        self.comm_chan.as_ref().unwrap().block_send_info(buf);
+    }
+
+    pub fn poll_comm_chan(&self) {
+        let mut recv_buf = Some(self.comm_chan_alloc_buf());
+        loop {
+            let res = self.comm_chan.as_ref().unwrap().recv_info(recv_buf.as_mut().unwrap());
+            if res == DOCAError::DOCA_ERROR_AGAIN {
+                break;
+            }
+            let buf = recv_buf.as_ref().unwrap();
+            let header = buf.get_header();
+            match header.info_type {
+                doca_conn_info_type::REQ => {
+                    self.comm_handler.upgrade().unwrap().comm_handler(buf);
+                }
+                doca_conn_info_type::REPLY => {
+                    self.comm_replys.lock().unwrap()[header.info_cid as usize] = recv_buf.take();
+                    recv_buf = Some(self.comm_chan_alloc_buf());
+                }
+                _ => { panic!("unsupported!"); }
+            }
+        }
+
+        if let Some(buf) = recv_buf {
+            self.comm_chan_dealloc_buf(buf);
+        }
+    }
+
+    async fn yield_until_conn_ready(&self, cid: u32) -> DocaConnBuf {
+        loop {
+            if self.comm_replys.lock().unwrap()[cid as usize].is_none() {
+                self.yield_now(cid).await;
+            } else {
+                return self.comm_replys.lock().unwrap()[cid as usize].take().unwrap();
+            }
+        }
+    }
+
 }
 
 // Async waiter
