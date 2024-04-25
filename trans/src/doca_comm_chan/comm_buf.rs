@@ -65,8 +65,8 @@ impl DocaCommBuf {
 
     #[inline]
     pub unsafe fn append_item<ITEM: Clone>(&mut self, item: ITEM) {
-        let slice_mut = std::slice::from_raw_parts_mut(self.buf.as_ptr().byte_add(self.pointer.payload) as *mut ITEM, 1);
-        slice_mut[0] = item;
+        let item_mut = unsafe{ (self.buf.as_ptr().byte_add(self.pointer.payload) as *mut ITEM).as_mut().unwrap() };
+        *item_mut = item;
         self.pointer.payload += std::mem::size_of::<ITEM>();
     }
 }

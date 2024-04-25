@@ -52,12 +52,12 @@ impl OccCtrlWorker {
         );
 
         occ1.start();
-        let idx = occ1.write::<Account>(0, 1, 10037, RwType::INSERT);
+        let idx = occ1.write::<Account>(0, 0, 10037, RwType::INSERT);
         occ1.set_value(false, idx, &Account{
             balance: 34567
         });
 
-        let idx = occ1.write::<Account>(0, 1, 13356, RwType::INSERT);
+        let idx = occ1.write::<Account>(0, 0, 13356, RwType::INSERT);
         occ1.set_value(false, idx, &Account{
             balance: 67890
         });
@@ -75,10 +75,10 @@ impl OccCtrlWorker {
         );
         occ2.start();
 
-        let idx = occ2.read::<Account>(0, 1, 10037);
+        let idx = occ2.read::<Account>(0, 0, 10037);
         assert_eq!(occ2.get_value::<Account>(false, idx).await.balance, 34567);
 
-        let idx = occ2.read::<Account>(0, 1, 13356);
+        let idx = occ2.read::<Account>(0, 0, 13356);
         assert_eq!(occ2.get_value::<Account>(false, idx).await.balance, 67890);
 
         occ2.commit().await;
@@ -105,14 +105,14 @@ impl OccCtrlWorker {
         );
         occ2.start();
 
-        let idx2 = occ2.read::<Account>(0, 1, 10037);
+        let idx2 = occ2.read::<Account>(0, 0, 10037);
         let balance2 = occ2.get_value::<Account>(false, idx2).await.balance;
-        let idx2 = occ2.write::<Account>(0, 1, 13356, RwType::UPDATE);
+        let idx2 = occ2.write::<Account>(0, 0, 13356, RwType::UPDATE);
         occ2.set_value::<Account>(false, idx2, &Account{
             balance: balance2,
         });
 
-        let idx1 = occ1.fetch_write::<Account>(0, 1, 13356);
+        let idx1 = occ1.fetch_write::<Account>(0, 0, 13356);
         let balance1 = occ1.get_value::<Account>(true, idx1).await.balance + 1;
 
         occ1.set_value(true, idx1, &Account{
@@ -133,7 +133,7 @@ impl OccCtrlWorker {
             &self.scheduler,
         );
         occ3.start();
-        let idx3 = occ3.read::<Account>(0, 1, 13356);
+        let idx3 = occ3.read::<Account>(0, 0, 13356);
         let balance3 = occ3.get_value::<Account>(false, idx3).await.balance;
 
         assert_eq!(balance3, balance1);
@@ -164,7 +164,7 @@ async fn test() {
     Arc::get_mut(&mut valuedb).unwrap().add_schema(0, TableSchema::default(), valuestore);
 
     // scheduler
-    let mut comm_chan = DocaCommChannel::new_client("cc_server", "af:00.0");
+    let mut comm_chan = DocaCommChannel::new_client("cc_server\0", "af:00.0");
 
     let rdma = RdmaControl::new(0);
 

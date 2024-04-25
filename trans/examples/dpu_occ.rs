@@ -77,7 +77,7 @@ async fn test() {
 
     // comm conn
     // scheduler
-    let mut comm_chan = DocaCommChannel::new_server("cc_server", "03:00.0", "af:00.0");
+    let mut comm_chan = DocaCommChannel::new_server("cc_server\0", "03:00.0", "af:00.0");
 
     let rdma = RdmaControl::new(100);
 
