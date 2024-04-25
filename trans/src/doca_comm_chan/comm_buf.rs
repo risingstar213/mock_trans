@@ -37,9 +37,10 @@ impl DocaCommBuf {
         DocaCommHeaderMeta::from_header(header)
     }
 
-    pub unsafe fn get_const_slice<ITEM:Clone>(&self, count: usize) -> &'static [ITEM] {
+    pub unsafe fn get_item<ITEM:Clone>(&self, idx: usize) -> &ITEM {
         unsafe {
-            std::slice::from_raw_parts(self.buf.as_ptr().byte_add(4) as *const ITEM, count)
+            let ptr = self.buf.as_ptr().byte_add(4 + idx * std::mem::size_of::<ITEM>());
+            (ptr as *const ITEM).as_ref().unwrap()
         }
     }
 

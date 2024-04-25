@@ -51,8 +51,8 @@ impl DpuRpcProc {
         self.trans_view.start_read_trans(&trans_key);
         let mut read_cache_writer = self.trans_view.new_read_cache_writer(&trans_key, MAIN_ROUTINE_ID);
 
-        let items = unsafe { buf.get_const_slice::<LocalReadInfoItem>(count) };
-        for item in items {
+        for i in 0..count {
+            let item = unsafe { buf.get_item::<LocalReadInfoItem>(i) };
             let meta = self.memdb.local_get_meta(
                 item.table_id, 
                 item.key
@@ -99,8 +99,8 @@ impl DpuRpcProc {
         let mut success = true;
         let lock_content = LockContent::new(info_pid as _, self.tid as _, info_cid);
 
-        let items = unsafe { buf.get_const_slice::<LocalLockInfoItem>(count) };
-        for item in items {
+        for i in 0..count {
+            let item = unsafe { buf.get_item::<LocalLockInfoItem>(i) };
             let meta = self.memdb.local_lock(
                 item.table_id, 
                 item.key, 
