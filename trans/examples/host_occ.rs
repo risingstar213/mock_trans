@@ -84,6 +84,8 @@ impl OccCtrlWorker {
         occ2.commit().await;
 
         assert_eq!(occ2.is_commited(), true);
+
+        println!("insert !");
     }
 
     async fn test_conflicts(&self) {
@@ -140,6 +142,8 @@ impl OccCtrlWorker {
 
         occ3.commit().await;
         assert_eq!(occ3.is_commited(), true);
+
+        println!("pass conflicts!");
     }
 
     async fn work_routine(&self, cid: u32) {

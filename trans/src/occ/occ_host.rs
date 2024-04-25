@@ -358,7 +358,7 @@ impl<const MAX_ITEM_SIZE: usize> OccHost<MAX_ITEM_SIZE>
             let len = self.valuedb.get_item_length(update_item.table_id);
             let meta = self.valuedb.local_get_value(update_item.table_id, update_item.key, ptr, len as _);
 
-            let bucket = self.readset.bucket(update_item.update_idx);
+            let bucket = self.updateset.bucket(update_item.update_idx);
 
             bucket.value.set_raw_data(ptr, len as _);
         }
