@@ -1,6 +1,7 @@
 use core::panic;
 
 use super::memstore::{MemNodeMeta, MemStore};
+use super::valuestore::ValueStore;
 
 #[allow(unused)]
 pub struct TableSchema {
@@ -138,5 +139,81 @@ impl MemDB
         }
 
         self.tables[table_id].local_erase(key)
+    }
+}
+
+
+pub struct ValueDB {
+    metas:  Vec<TableSchema>,
+    tables: Vec<Box<dyn ValueStore + Send + Sync + 'static>>,
+}
+
+impl ValueDB
+{
+    pub fn new() -> Self {
+        Self {
+            metas: Vec::new(),
+            tables: Vec::new()
+        }
+    }
+
+    pub fn add_schema(&mut self, table_id: usize, schema: TableSchema, table: impl ValueStore + Send + Sync + 'static) {
+        let table_count = self.metas.len();
+        if table_count != table_id {
+            panic!("not rational add schema");
+        }
+
+        self.metas.push(schema);
+        self.tables.push(Box::new(table) as _);
+    }
+
+    // local
+    pub fn get_item_length(&self, table_id: usize) -> usize {
+        if table_id >= self.metas.len() {
+            println!("the table does not exists!");
+            return 0;
+        }
+
+        self.tables[table_id].get_item_length()
+    }
+
+    pub fn local_get_value(&self, table_id: usize, key: u64, ptr: *mut u8, len: u32) -> bool
+    {
+        if table_id >= self.metas.len() {
+            println!("the table does not exists!");
+            return false;
+        }
+
+        self.tables[table_id].local_get_value(key, ptr, len)
+    }
+
+    pub fn local_set_value(&self, table_id: usize, key: u64, ptr: *const u8, len: u32)
+    {
+        if table_id >= self.metas.len() {
+            println!("the table does not exists!");
+            return;
+        }
+
+        self.tables[table_id].local_set_value(key, ptr, len);
+    }
+
+    pub fn local_put_value(&self, table_id: usize, key: u64, ptr: *const u8, len: u32)
+    {
+        if table_id >= self.metas.len() {
+            println!("the table does not exists!");
+            return;
+        }
+
+        self.tables[table_id].local_put_value(key, ptr, len);
+    }
+
+    pub fn local_erase_value(&self, table_id: usize, key: u64)
+    {
+        if table_id >= self.metas.len() {
+            println!("the table does not exists!");
+            return;
+        }
+
+        self.tables[table_id].local_erase_value(key);
     }
 }

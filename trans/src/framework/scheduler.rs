@@ -9,6 +9,7 @@ use crate::rdma::RdmaRecvCallback;
 // use crate::rdma::one_side::OneSideComm;
 use crate::rdma::two_sides::TwoSidesComm;
 use crate::rdma::RdmaSendCallback;
+use crate::MAX_CONN_MSG_SIZE;
 
 #[cfg(feature = "doca_deps")]
 use doca::DOCAError;
@@ -23,10 +24,10 @@ use crate::doca_comm_chan::connection::DocaCommChannel;
 use crate::doca_comm_chan::connection::{ DocaCommHandler, DEFAULT_DOCA_CONN_HANDLER };
 
 #[cfg(feature = "doca_deps")]
-use crate::doca_comm_chan::conn_buf::DocaConnBuf;
+use crate::doca_comm_chan::comm_buf::{ DocaCommBuf, DocaCommReply, DocaCommReplyWrapper };
 
 #[cfg(feature = "doca_deps")]
-use crate::doca_comm_chan::doca_conn_info_type;
+use crate::doca_comm_chan::doca_comm_info_type;
 
 use super::rpc_shared_buffer::RpcBufAllocator;
 
@@ -94,7 +95,7 @@ pub struct AsyncScheduler {
     #[cfg(feature = "doca_deps")]
     comm_handler: Weak<dyn DocaCommHandler + Send + Sync + 'static>,
     #[cfg(feature = "doca_deps")]
-    comm_replys: Mutex<Vec<Option<DocaConnBuf>>>,
+    comm_replys: Mutex<Vec<DocaCommReply>>,
 }
 
 // 手动标记 Send + Sync
@@ -435,7 +436,7 @@ impl AsyncScheduler {
     pub fn set_comm_chan(&mut self, chan: DocaCommChannel) {
         let routine_num = self.pendings.lock().unwrap().len();
         for _ in 0..routine_num {
-            self.comm_replys.lock().unwrap().push(None);
+            self.comm_replys.lock().unwrap().push(DocaCommReply::new());
         }
         self.comm_chan = Some(chan)
     }
@@ -445,51 +446,67 @@ impl AsyncScheduler {
     }
 
     #[inline]
-    pub fn comm_chan_alloc_buf(&self) -> DocaConnBuf {
+    pub fn comm_chan_alloc_buf(&self) -> DocaCommBuf {
         self.comm_chan.as_ref().unwrap().alloc_buf()
     }
 
     #[inline]
-    pub fn comm_chan_dealloc_buf(&self, buf: DocaConnBuf) {
+    pub fn comm_chan_dealloc_buf(&self, buf: DocaCommBuf) {
         self.comm_chan.as_ref().unwrap().dealloc_buf(buf);
     }
 
-    pub fn block_send_info(&self, buf: &mut DocaConnBuf) {
+    pub fn block_send_info(&self, buf: &mut DocaCommBuf) {
         self.comm_chan.as_ref().unwrap().block_send_info(buf);
     }
 
+    pub fn prepare_comm_replys(&self, cid: u32, count: usize) {
+        self.comm_replys.lock().unwrap()[cid as usize].reset(count);
+    }
+
     pub fn poll_comm_chan(&self) {
-        let mut recv_buf = Some(self.comm_chan_alloc_buf());
+        let mut recv_buf = self.comm_chan_alloc_buf();
         loop {
-            let res = self.comm_chan.as_ref().unwrap().recv_info(recv_buf.as_mut().unwrap());
+            recv_buf.set_payload(MAX_CONN_MSG_SIZE);
+            let res = self.comm_chan.as_ref().unwrap().recv_info(&mut recv_buf);
             if res == DOCAError::DOCA_ERROR_AGAIN {
                 break;
             }
-            let buf = recv_buf.as_ref().unwrap();
-            let header = buf.get_header();
+            let header = recv_buf.get_header();
             match header.info_type {
-                doca_conn_info_type::REQ => {
-                    self.comm_handler.upgrade().unwrap().comm_handler(buf);
+                doca_comm_info_type::REQ => {
+                    self.comm_handler.upgrade().unwrap().comm_handler(
+                        &recv_buf,
+                        header.info_id,
+                        header.info_payload,
+                        header.info_pid,
+                        header.info_cid,
+                    );
                 }
-                doca_conn_info_type::REPLY => {
-                    self.comm_replys.lock().unwrap()[header.info_cid as usize] = recv_buf.take();
-                    recv_buf = Some(self.comm_chan_alloc_buf());
+                doca_comm_info_type::REPLY => {
+                    let mut replys = self.comm_replys.lock().unwrap();
+                    
+                    let write_ptr = unsafe { replys[header.info_cid as usize].get_mut_ptr() };
+                    unsafe {
+                        std::ptr::copy_nonoverlapping(recv_buf.get_const_ptr(), write_ptr, header.info_payload as usize);
+                    }
+                    replys[header.info_cid as usize].append_reply(header.info_payload as usize);
                 }
                 _ => { panic!("unsupported!"); }
             }
         }
 
-        if let Some(buf) = recv_buf {
-            self.comm_chan_dealloc_buf(buf);
-        }
+        self.comm_chan_dealloc_buf(recv_buf);
     }
 
-    async fn yield_until_conn_ready(&self, cid: u32) -> DocaConnBuf {
+    pub async fn yield_until_comm_ready(&self, cid: u32) -> DocaCommReplyWrapper {
         loop {
-            if self.comm_replys.lock().unwrap()[cid as usize].is_none() {
+            if self.comm_replys.lock().unwrap()[cid as usize].get_pending_count() > 0 {
                 self.yield_now(cid).await;
             } else {
-                return self.comm_replys.lock().unwrap()[cid as usize].take().unwrap();
+                unsafe {
+                    let ptr = self.comm_replys.lock().unwrap()[cid as usize].get_const_head_ptr();
+                    return DocaCommReplyWrapper::new(ptr);
+                }
             }
         }
     }

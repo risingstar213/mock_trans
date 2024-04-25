@@ -6,9 +6,9 @@ use doca::device::{ open_device_with_pci, open_device_rep_with_pci };
 use doca_sys::doca_error;
 
 
-use super::conn_buf::{ DocaConnBufAllocator, DocaConnBuf };
+use super::comm_buf::{ DocaCommBufAllocator, DocaCommBuf };
 pub struct DocaCommChannel {
-    allocator: Mutex<DocaConnBufAllocator>,
+    allocator: Mutex<DocaCommBufAllocator>,
     chan: Arc<CommChannel>,
 }
 
@@ -18,7 +18,7 @@ impl DocaCommChannel {
         let device_rep = open_device_rep_with_pci(&device, pci_addr_rep).unwrap();
     
         Self {
-            allocator: Mutex::new(DocaConnBufAllocator::new()),
+            allocator: Mutex::new(DocaCommBufAllocator::new()),
             chan: CommChannel::create_server(server_name, &device, &device_rep)
         }
     }
@@ -27,24 +27,24 @@ impl DocaCommChannel {
         let device = open_device_with_pci(pci_addr).unwrap();
 
         Self {
-            allocator: Mutex::new(DocaConnBufAllocator::new()),
+            allocator: Mutex::new(DocaCommBufAllocator::new()),
             chan: CommChannel::create_client(server_name, &device)
         }
     }
 
-    pub fn block_send_info(&self, buf: &mut DocaConnBuf) {
+    pub fn block_send_info(&self, buf: &mut DocaCommBuf) {
         self.chan.block_send_req(buf.as_raw_pointer());
     }
 
-    pub fn recv_info(&self, buf: &mut DocaConnBuf) -> doca_error {
+    pub fn recv_info(&self, buf: &mut DocaCommBuf) -> doca_error {
         self.chan.recv_req(buf.as_raw_pointer())
     }
 
-    pub fn alloc_buf(&self) -> DocaConnBuf {
+    pub fn alloc_buf(&self) -> DocaCommBuf {
         self.allocator.lock().unwrap().alloc_buf()
     }
 
-    pub fn dealloc_buf(&self, buf: DocaConnBuf) {
+    pub fn dealloc_buf(&self, buf: DocaCommBuf) {
         self.allocator.lock().unwrap().dealloc_buf(buf);
     }
 }
@@ -52,7 +52,11 @@ impl DocaCommChannel {
 pub trait DocaCommHandler {
     fn comm_handler(
         &self,
-        buf: &DocaConnBuf
+        buf: &DocaCommBuf,
+        info_id: u32,
+        info_payload: u32,
+        info_pid: u32,
+        info_cid: u32,
     );
 }
 
@@ -62,7 +66,11 @@ impl DocaCommHandler for DefaultDocaCommHandler {
     #[allow(unused)]
     fn comm_handler(
         &self,
-        buf: &DocaConnBuf
+        buf: &DocaCommBuf,
+        info_id: u32,
+        info_payload: u32,
+        info_pid: u32,
+        info_cid: u32,
     ) {
         unimplemented!("comm handler");
     }

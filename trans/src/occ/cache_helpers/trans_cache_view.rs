@@ -26,6 +26,13 @@ impl TransKey {
             key: lockcontent.to_content(),
         }
     }
+
+    pub fn new_raw(pid: u32, tid: u32, cid: u32) -> Self {
+        let lockcontent = LockContent::new(pid as _, tid, cid);
+        Self {
+            key: lockcontent.to_content(),
+        }
+    }
 }
 
 #[derive(Clone)]

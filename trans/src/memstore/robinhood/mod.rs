@@ -1,2 +1,2 @@
-mod robinhood;
+pub mod robinhood;
 pub mod robinhoodcell;
