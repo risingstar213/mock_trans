@@ -75,6 +75,7 @@ async fn test() {
     let mut memdb = Arc::new(MemDB::new());
     let memstore = RobinhoodMemStore::<PhantomData<usize>>::new();
 
+    Arc::get_mut(&mut memdb).unwrap().add_schema(0, TableSchema::default(), memstore);
     // comm conn
     // scheduler
     let mut comm_chan = DocaCommChannel::new_server("cc_server\0", "03:00.0", "af:00.0");
