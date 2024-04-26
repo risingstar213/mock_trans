@@ -24,7 +24,7 @@ async fn connect_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize, client
     rdma.connect(100, "10.10.10.26\0", CONN_PORTS[tid]).unwrap();
 
     let allocator = rdma.get_allocator();
-    let mut scheduler = Arc::new(AsyncScheduler::new(0, 3, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new(0, 8, &allocator));
 
     let conn_host = rdma.get_connection(0);
     conn_host.lock().unwrap().init_and_start_recvs().unwrap();
