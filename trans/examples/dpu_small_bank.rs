@@ -64,9 +64,10 @@ async fn init_and_run(tid: usize, memdb: Arc<MemDB>) {
 pub fn test() {
     let memdb = SmallBankDpuLoader::new_dpudb(0);
 
+    let mut ths = Vec::new();
     for i in 0..SMALL_BANK_NTHREADS {
         let memdb_clone = memdb.clone();
-        std::thread::spawn(move || {
+        ths.push(std::thread::spawn(move || {
             tokio::runtime::Builder::new_current_thread()
                 .enable_all()
                 .build()
@@ -74,7 +75,11 @@ pub fn test() {
                 .block_on(async move {
                     init_and_run(i, memdb_clone).await;
             });
-        });
+        }));
+    }
+
+    for th in ths {
+        th.join().unwrap();
     }
 }
 
