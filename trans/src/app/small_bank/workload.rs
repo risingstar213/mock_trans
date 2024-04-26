@@ -276,6 +276,8 @@ impl SmallBankWorker {
             &self.scheduler,
         );
 
+        txn.start();
+
         txn.fetch_write::<SmallBankChecking>(
             small_bank_table_id::CHECKING_TABLE_ID,
             account_to_part(lid) as _,
@@ -307,6 +309,8 @@ impl SmallBankWorker {
             &self.memdb, 
             &self.scheduler,
         );
+
+        txn.start();
 
         for i in 0..4 {
             txn.read::<SmallBankChecking>(small_bank_table_id::CHECKING_TABLE_ID,
