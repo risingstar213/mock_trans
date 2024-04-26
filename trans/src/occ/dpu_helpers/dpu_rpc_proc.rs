@@ -300,7 +300,7 @@ impl DpuRpcProc {
             ).unwrap();
 
             unsafe {
-                comm_req.append_item(req_item);
+                comm_req.append_item(req_item.clone());
             }
 
             read_cache_writer.block_append_item(&self.trans_view, CacheReadSetItem{
@@ -364,7 +364,7 @@ impl DpuRpcProc {
                 break;
             } else {
                 unsafe {
-                    comm_req.append_item(req_item);
+                    comm_req.append_item(req_item.clone());
                 }
 
                 write_cache_writer.block_append_item(&self.trans_view, CacheWriteSetItem{
