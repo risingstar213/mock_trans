@@ -4,6 +4,7 @@ pub mod worker;
 pub mod local_client;
 pub mod loader;
 
+#[cfg(feature = "doca_deps")]
 pub mod dpu_helpers;
 
 use std::sync::Arc;

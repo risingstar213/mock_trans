@@ -1,5 +1,6 @@
 #![feature(get_mut_unchecked)]
 
+#[cfg(feature = "doca_deps")]
 mod test_dpu {
 
 use std::sync::{ Arc, Mutex };
