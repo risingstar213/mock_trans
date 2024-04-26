@@ -25,7 +25,7 @@ const PEERNUMS: u64 = 2;
 
 // mem info
 const NPAGES: u64 = 128;
-const MAX_PACKET_SIZE: usize = 128;
+const MAX_PACKET_SIZE: usize = 256;
 
 // send recv info
 const MAX_SEND_SIZE: usize = 32;
@@ -39,7 +39,7 @@ const WRID_RESERVE_BITS: usize = 8;
 // RPCs
 const MAX_INFLIGHT_REPLY: usize = 128;
 const MAX_INFLIGHT_REQS_PER_ROUTINE: usize = 16;
-const MAX_REQ_SIZE: usize = 128;
+const MAX_REQ_SIZE: usize = 256;
 const MAX_RESP_SIZE: usize = 512;
 
 /////////////////// MemStore //////////////////////////
@@ -49,13 +49,13 @@ const ROBINHOOD_DIB_MAX: usize = 8;
 
 /////////////////// DOCA DMA //////////////////////////
 const DOCA_WORKQ_DEPTH: usize = 8;
-const MAX_DMA_BUF_SIZE: usize = 128;
+const MAX_DMA_BUF_SIZE: usize = 256;
 const MAX_DMA_BUF_REMOTE: usize = 128;
 const MAX_DMA_BUF_PER_ROUTINE: usize = 16;
 
 /////////////////// DOCA CONN /////////////////////////
 const MAX_CONN_INFO_BUFS: usize = 16;
-const MAX_CONN_MSG_SIZE: usize = 128;
+const MAX_CONN_MSG_SIZE: usize = 256;
 
 /////////////////// CACHE /////////////////////////////
 const MAX_LOCAL_CACHE_BUF_COUNT: usize = 32;
