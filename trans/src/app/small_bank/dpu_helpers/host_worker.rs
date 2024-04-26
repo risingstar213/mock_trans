@@ -2,60 +2,73 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio::sync::Mutex as AsyncMutex;
 
-use crate::rdma::control::RdmaControl;
-use crate::rdma::rcconn::RdmaRcConn;
-use crate::memstore::memdb::MemDB;
-use crate::SMALL_BANK_NROUTINES;
 use crate::common::random::FastRandom;
-use crate::framework::worker::AsyncWorker;
+use crate::memstore::memdb::ValueDB;
+use crate::occ::occ_rpc_id;
+use crate::occ::HostRpcProc;
+use crate::occ::doca_comm_info_id;
 use crate::framework::scheduler::AsyncScheduler;
 use crate::framework::rpc::*;
-use crate::occ::occ_rpc_id;
+use crate::doca_comm_chan::connection::DocaCommHandler;
+use crate::doca_comm_chan::comm_buf::DocaCommBuf;
+use crate::rdma::rcconn::RdmaRcConn;
+use crate::SMALL_BANK_NROUTINES;
 
-use super::SmallBankWorker;
-use super::SmallBankClientReq;
-use super::SmallBankWordLoadId;
+use super::super::*;
 
-impl AsyncWorker for SmallBankWorker {
-    fn get_scheduler(&self) -> &crate::framework::scheduler::AsyncScheduler {
-        &self.scheduler
-    }
+pub struct SmallBankHostWorker {
+    pub part_id: u64,
+    pub tid: u32,
+    pub valuedb: Arc<ValueDB>,
+    pub scheduler: Arc<AsyncScheduler>,
+    pub proc: HostRpcProc,
+}
 
-    fn has_stopped(&self) -> bool {
-        false
+impl SmallBankHostWorker {
+    pub fn new(part_id: u64, tid: u32, valuedb: &Arc<ValueDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
+        Self {
+            part_id: part_id,
+            tid: tid, 
+            scheduler: scheduler.clone(),
+            valuedb: valuedb.clone(),
+            proc: HostRpcProc::new(tid, valuedb, scheduler),
+        }
     }
 }
 
-impl RpcHandler for SmallBankWorker {
+impl DocaCommHandler for SmallBankHostWorker {
+    fn comm_handler(
+            &self,
+            buf: &DocaCommBuf,
+            info_id: u32,
+            info_payload: u32,
+            info_pid: u32,
+            info_cid: u32,
+        ) {
+        match info_id {
+            doca_comm_info_id::REMOTE_READ_INFO => {
+                self.proc.remote_read_info_handler(buf, info_payload, info_pid, info_cid);
+            }
+            doca_comm_info_id::REMOTE_FETCHWRITE_INFO => {
+                self.proc.remote_fetch_write_info_handler(buf, info_payload, info_pid, info_cid);
+            }
+            _ => { panic!("unsupported!"); }
+        }
+    }
+}
+
+impl RpcHandler for SmallBankHostWorker {
     fn rpc_handler(
         &self,
-        src_conn: &mut RdmaRcConn,
-        rpc_id: u32,
-        msg: *mut u8,
-        size: u32,
-        meta: RpcProcessMeta,
+            src_conn: &mut RdmaRcConn,
+            rpc_id: u32,
+            msg: *mut u8,
+            size: u32,
+            meta: RpcProcessMeta,
     ) {
         match rpc_id {
-            occ_rpc_id::READ_RPC => {
-                self.proc.read_cache_rpc_handler(src_conn, msg, size, meta);
-            }
-            occ_rpc_id::FETCHWRITE_RPC => {
-                self.proc.fetch_write_cache_rpc_handler(src_conn, msg, size, meta);
-            }
-            occ_rpc_id::LOCK_RPC => {
-                self.proc.lock_cache_rpc_handler(src_conn, msg, size, meta);
-            }
-            occ_rpc_id::VALIDATE_RPC => {
-                self.proc.validate_cache_rpc_handler(src_conn, msg, size, meta);
-            }
             occ_rpc_id::COMMIT_RPC => {
                 self.proc.commit_cache_rpc_handler(src_conn, msg, size, meta);
-            }
-            occ_rpc_id::RELEASE_RPC => {
-                self.proc.release_cache_rpc_handler(src_conn, msg, size, meta);
-            }
-            occ_rpc_id::ABORT_RPC => {
-                self.proc.abort_cache_rpc_handler(src_conn, msg, size, meta);
             }
             _ => {
                 unimplemented!();
@@ -64,8 +77,7 @@ impl RpcHandler for SmallBankWorker {
     }
 }
 
-
-impl SmallBankWorker {
+impl SmallBankHostWorker {
     async fn work_routine(&self, cid: u32, rand_seed: usize, conn: Arc<AsyncMutex<mpsc::Receiver<SmallBankClientReq>>>) {
         let mut rand_gen = FastRandom::new(rand_seed);
         
@@ -94,6 +106,16 @@ impl SmallBankWorker {
                     self.txn_amalgamate(&mut rand_gen, cid).await;
                 }
             }
+        }
+    }
+
+    async fn main_routine(&self) {
+        loop {
+            self.scheduler.poll_recvs();
+            self.scheduler.poll_sends();
+            self.scheduler.poll_comm_chan();
+
+            self.scheduler.yield_now(0).await;
         }
     }
 

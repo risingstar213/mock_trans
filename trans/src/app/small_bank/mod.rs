@@ -4,6 +4,8 @@ pub mod worker;
 pub mod local_client;
 pub mod loader;
 
+pub mod dpu_helpers;
+
 use std::sync::Arc;
 
 use crate::framework::scheduler::AsyncScheduler;

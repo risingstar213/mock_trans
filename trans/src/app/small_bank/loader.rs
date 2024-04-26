@@ -14,7 +14,7 @@ use super::SmallBankChecking;
 use super::small_bank_table_id;
 
 #[inline]
-fn random_account_number(rand_gen: &mut FastRandom) -> f64 {
+pub fn random_account_number(rand_gen: &mut FastRandom) -> f64 {
     rand_gen.next_uniform() * (SMALL_BANK_MAX_BALANCE - SMALL_BANK_MIN_BALANCE) + SMALL_BANK_MAX_BALANCE
 }
 

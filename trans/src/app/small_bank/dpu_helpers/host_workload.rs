@@ -3,28 +3,21 @@ use std::sync::Arc;
 use crate::common::random::FastRandom;
 use crate::framework::scheduler::AsyncScheduler;
 use crate::memstore::memdb::MemDB;
-use crate::occ::occ_hybrid::OccHybrid;
+use crate::occ::occ_host::OccHost;
 
-use super::SmallBankWorker;
-use super::small_bank_table_id;
-use super::SMALL_BANK_MAX_ITEM_SIZE;
-use super::SmallBankAccounts;
-use super::SmallBankChecking;
-use super::SmallBankSavings;
-use super::utils::{ random_get_accounts, account_to_part };
+use super::host_worker::SmallBankHostWorker;
+use super::super::*;
+use super::super::utils::{ random_get_accounts, account_to_part };
 
-// polymorphic manually
-
-// workload
-impl SmallBankWorker {
+impl SmallBankHostWorker {
     // update checking * 2
     pub async fn txn_send_payment(&self, rand_gen: &mut FastRandom, cid: u32) {
         // println!("txn_send_payment");
-        let mut txn = OccHybrid::<SMALL_BANK_MAX_ITEM_SIZE>::new(
+        let mut txn = OccHost::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
             self.tid,
             cid, 
-            &self.memdb, 
+            &self.valuedb, 
             &self.scheduler,
         );
 
@@ -66,11 +59,11 @@ impl SmallBankWorker {
     // update checking
     pub async fn txn_deposit_checking(&self, rand_gen: &mut FastRandom, cid: u32) {
         // println!("txn_deposit_checking");
-        let mut txn = OccHybrid::<SMALL_BANK_MAX_ITEM_SIZE>::new(
+        let mut txn = OccHost::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
             self.tid,
             cid, 
-            &self.memdb, 
+            &self.valuedb, 
             &self.scheduler,
         );
 
@@ -99,11 +92,11 @@ impl SmallBankWorker {
     // read checking && saving
     pub async fn txn_balance(&self, rand_gen: &mut FastRandom, cid: u32) {
         // println!("txn_balance");
-        let mut txn = OccHybrid::<SMALL_BANK_MAX_ITEM_SIZE>::new(
+        let mut txn = OccHost::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
             self.tid,
             cid, 
-            &self.memdb, 
+            &self.valuedb, 
             &self.scheduler,
         );
 
@@ -136,11 +129,11 @@ impl SmallBankWorker {
     // update saving
     pub async fn txn_transact_savings(&self, rand_gen: &mut FastRandom, cid: u32) {
         // println!("txn_transact_savings");
-        let mut txn = OccHybrid::<SMALL_BANK_MAX_ITEM_SIZE>::new(
+        let mut txn = OccHost::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
             self.tid,
             cid, 
-            &self.memdb, 
+            &self.valuedb, 
             &self.scheduler,
         );
 
@@ -169,11 +162,11 @@ impl SmallBankWorker {
     // read checing && saving -> write checking
     pub async fn txn_write_check(&self, rand_gen: &mut FastRandom, cid: u32) {
         // println!("txn_write_check");
-        let mut txn = OccHybrid::<SMALL_BANK_MAX_ITEM_SIZE>::new(
+        let mut txn = OccHost::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
             self.tid,
             cid, 
-            &self.memdb, 
+            &self.valuedb, 
             &self.scheduler,
         );
 
@@ -215,11 +208,11 @@ impl SmallBankWorker {
     // read checing && saving -> write checking
     pub async fn txn_amalgamate(&self, rand_gen: &mut FastRandom, cid: u32) {
         // println!("txn_amalgamate");
-        let mut txn = OccHybrid::<SMALL_BANK_MAX_ITEM_SIZE>::new(
+        let mut txn = OccHost::<SMALL_BANK_MAX_ITEM_SIZE>::new(
             self.part_id, 
             self.tid,
             cid, 
-            &self.memdb, 
+            &self.valuedb, 
             &self.scheduler,
         );
 
