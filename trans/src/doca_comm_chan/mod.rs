@@ -1,4 +1,6 @@
+#[cfg(feature = "doca_deps")]
 pub mod connection;
+#[cfg(feature = "doca_deps")]
 pub mod comm_buf;
 
 use byte_struct::*;

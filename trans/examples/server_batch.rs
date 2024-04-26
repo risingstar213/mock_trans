@@ -49,7 +49,7 @@ unsafe impl Sync for AddRpcProcess {}
 fn main() {
     let mut rdma = RdmaControl::new(1);
     rdma.init("0.0.0.0\0", "7472\0");
-    rdma.listen_task();
+    rdma.listen_task(1);
 
     let conn = rdma.get_connection(0);
     conn.lock().unwrap().init_and_start_recvs().unwrap();

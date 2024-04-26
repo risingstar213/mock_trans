@@ -1,9 +1,17 @@
 #![feature(get_mut_unchecked)]
+
+#[cfg(feature = "doca_deps")]
+mod test_dpu {
+
 use std::sync::Arc;
 
+use trans::occ::occ_rpc_id;
 use trans::rdma::control::RdmaControl;
 
+use trans::occ::doca_comm_info_id;
+use trans::framework::rpc::RpcHandler;
 use trans::doca_comm_chan::connection::DocaCommChannel;
+use trans::doca_comm_chan::connection::DocaCommHandler;
 use trans::memstore::memdb::{ValueDB, TableSchema};
 use trans::memstore::{MemStoreValue, RobinhoodMemStore};
 use trans::memstore::RobinhoodValueStore;
@@ -12,6 +20,7 @@ use trans::framework::scheduler::AsyncScheduler;
 
 use trans::occ::occ_host::OccHost;
 use trans::occ::RwType;
+use trans::occ::HostRpcProc;
 
 #[repr(C)]
 #[derive(Clone)]
@@ -30,6 +39,7 @@ impl Default for Account {
 struct OccCtrlWorker {
     valuedb: Arc<ValueDB>,
     scheduler: Arc<AsyncScheduler>,
+    proc: HostRpcProc,
 }
 
 impl OccCtrlWorker {
@@ -37,6 +47,7 @@ impl OccCtrlWorker {
         Self {
             valuedb: valuedb.clone(),
             scheduler: scheduler.clone(),
+            proc: HostRpcProc::new(0, valuedb, scheduler),
         }
     }
 }
@@ -153,40 +164,108 @@ impl OccCtrlWorker {
 
     async fn main_routine(&self) {
         loop {
+            self.scheduler.poll_recvs();
+            self.scheduler.poll_sends();
             self.scheduler.poll_comm_chan();
+
             self.scheduler.yield_now(0).await;
         }
     }
 }
 
+impl DocaCommHandler for OccCtrlWorker {
+    fn comm_handler(
+            &self,
+            buf: &trans::doca_comm_chan::comm_buf::DocaCommBuf,
+            info_id: u32,
+            info_payload: u32,
+            info_pid: u32,
+            info_cid: u32,
+        ) {
+        match info_id {
+            doca_comm_info_id::REMOTE_READ_INFO => {
+                self.proc.remote_read_info_handler(buf, info_payload, info_pid, info_cid);
+            }
+            doca_comm_info_id::REMOTE_FETCHWRITE_INFO => {
+                self.proc.remote_fetch_write_info_handler(buf, info_payload, info_pid, info_cid);
+            }
+            _ => { panic!("unsupported!"); }
+        }
+    }
+}
 
-async fn test() {
+impl RpcHandler for OccCtrlWorker {
+    fn rpc_handler(
+        &self,
+            src_conn: &mut trans::rdma::rcconn::RdmaRcConn,
+            rpc_id: u32,
+            msg: *mut u8,
+            size: u32,
+            meta: trans::framework::rpc::RpcProcessMeta,
+    ) {
+        match rpc_id {
+            occ_rpc_id::COMMIT_RPC => {
+                self.proc.commit_cache_rpc_handler(src_conn, msg, size, meta);
+            }
+            _ => {
+                unimplemented!();
+            }
+        }
+    }
+}
+
+pub async fn test() {
     // memdb
     let mut valuedb = Arc::new(ValueDB::new());
     let valuestore = RobinhoodValueStore::<Account>::new();
     
     Arc::get_mut(&mut valuedb).unwrap().add_schema(0, TableSchema::default(), valuestore);
 
+    // comm chan
+    let comm_chan = DocaCommChannel::new_client("cc_server\0", "af:00.0");
+
+        // rdma conn
+    let mut rdma = RdmaControl::new(100);
+    rdma.connect(1, "10.10.10.7\0", "7472").unwrap();
+
     // scheduler
-    let mut comm_chan = DocaCommChannel::new_client("cc_server\0", "af:00.0");
-
-    let rdma = RdmaControl::new(0);
-
     let allocator = rdma.get_allocator();
-    let mut scheduler = Arc::new(AsyncScheduler::new(0, 3, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new(0, 1, &allocator));
 
+    // scheduler add comm chan
     unsafe {
         Arc::get_mut_unchecked(&mut scheduler).set_comm_chan(comm_chan);
     }
 
+    // scheduler add rdma conn
+    let conn = rdma.get_connection(1);
+    conn.lock().unwrap().init_and_start_recvs().unwrap();
+    conn.lock()
+        .unwrap()
+        .register_recv_callback(&scheduler)
+        .unwrap();
+
+    unsafe {
+        Arc::get_mut_unchecked(&mut scheduler).append_conn(1, &conn);
+    }
+    
+    // worker
     let worker = Arc::new(OccCtrlWorker::new(&valuedb, &scheduler));
-    // scheduler.register_callback(&worker);
+    // worker comm chan handler
+    unsafe {
+        Arc::get_mut_unchecked(&mut scheduler).register_comm_handler(&worker);
+    }
+
+    // worker rdma conn handler
+    unsafe {
+        Arc::get_mut_unchecked(&mut scheduler).register_callback(&worker);
+    }
 
     {
-        let worker1 = worker.clone();
-        tokio::task::spawn(async move {
-            worker1.work_routine(1).await;
-        });
+        // let worker1 = worker.clone();
+        // tokio::task::spawn(async move {
+        //     worker1.work_routine(1).await;
+        // });
 
         let worker0 = worker.clone();
         tokio::task::spawn(async move {
@@ -197,12 +276,15 @@ async fn test() {
     }
 }
 
+}
+
 fn main() {
     tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap()
         .block_on(async move {
-            test().await;
+            #[cfg(feature = "doca_deps")]
+            test_dpu::test().await;
     });
 }

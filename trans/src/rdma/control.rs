@@ -387,8 +387,8 @@ impl RdmaControl {
             .insert(recv_data.peer_id, Arc::new(Mutex::new(connection)));
     }
 
-    pub fn listen_task(&mut self) {
-        while self.connections.len() < (PEERNUMS - 1) as usize {
+    pub fn listen_task(&mut self, peer_num: usize) {
+        while self.connections.len() < peer_num {
             self.accept();
         }
     }

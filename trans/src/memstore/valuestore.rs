@@ -9,7 +9,7 @@ use crate::{ROBINHOOD_SIZE, ROBINHOOD_DIB_MAX};
 pub trait ValueStore {
     fn get_item_length(&self) -> usize;
     fn local_get_value(&self, key: u64, ptr: *mut u8, len: u32) -> bool;
-    fn local_set_value(&self, key: u64, ptr: *const u8, len: u32);
+    fn local_set_value(&self, key: u64, ptr: *const u8, len: u32) -> bool;
     fn local_put_value(&self, key: u64, ptr: *const u8, len: u32);
     fn local_erase_value(&self, key: u64);
 }
@@ -105,7 +105,7 @@ where
         }
     }
 
-    fn local_set_value(&self, key: u64, ptr: *const u8, len: u32) {
+    fn local_set_value(&self, key: u64, ptr: *const u8, len: u32) -> bool {
         if std::mem::size_of::<T>() > len as usize {
             panic!("get length is not rational!");
         }
@@ -117,8 +117,11 @@ where
         match table.get(&key) {
             Some(node) => {
                 node.set_value(value);
+                return true;
             }
-            None => {}
+            None => {
+                return false;
+            }
         }
     }
 

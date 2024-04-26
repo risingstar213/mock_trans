@@ -9,6 +9,7 @@ mod dpu_helpers;
 pub mod occ_local;
 pub mod occ_remote;
 pub mod occ_trans_cache;
+pub mod occ_hybrid;
 
 #[cfg(feature = "doca_deps")]
 pub mod occ_host;
@@ -19,5 +20,7 @@ pub use rwset::RwType;
 
 #[cfg(feature = "doca_deps")]
 pub use dpu_helpers::dpu_rpc_proc::DpuRpcProc;
+#[cfg(feature = "doca_deps")]
+pub use dpu_helpers::host_rpc_proc::HostRpcProc;
 #[cfg(feature = "doca_deps")]
 pub use dpu_helpers::doca_comm_info_id;

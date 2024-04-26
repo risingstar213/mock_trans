@@ -1,7 +1,13 @@
 #![feature(get_mut_unchecked)]
+
+#[cfg(feature = "doca_deps")]
+mod test_dpu {
+
 use std::marker::PhantomData;
 use std::sync::Arc;
 
+use trans::occ::{BatchRpcProc, occ_rpc_id};
+use trans::framework::rpc::RpcHandler;
 use trans::occ::doca_comm_info_id;
 use trans::rdma::control::RdmaControl;
 
@@ -61,38 +67,97 @@ impl DocaCommHandler for OccProcWorker {
     }
 }
 
+impl RpcHandler for OccProcWorker {
+    fn rpc_handler(
+            &self,
+            src_conn: &mut trans::rdma::rcconn::RdmaRcConn,
+            rpc_id: u32,
+            msg: *mut u8,
+            size: u32,
+            meta: trans::framework::rpc::RpcProcessMeta,
+        ) {
+            match rpc_id {
+                occ_rpc_id::READ_RPC => {
+                    self.proc.read_cache_rpc_handler(src_conn, msg, size, meta);
+                }
+                occ_rpc_id::FETCHWRITE_RPC => {
+                    self.proc.fetch_write_cache_rpc_handler(src_conn, msg, size, meta);
+                }
+                occ_rpc_id::LOCK_RPC => {
+                    self.proc.lock_cache_rpc_handler(src_conn, msg, size, meta);
+                }
+                occ_rpc_id::VALIDATE_RPC => {
+                    self.proc.validate_cache_rpc_handler(src_conn, msg, size, meta);
+                }
+                occ_rpc_id::RELEASE_RPC => {
+                    self.proc.release_cache_rpc_handler(src_conn, msg, size, meta);
+                }
+                occ_rpc_id::ABORT_RPC => {
+                    self.proc.abort_cache_rpc_handler(src_conn, msg, size, meta);
+                }
+                _ => {
+                    unimplemented!();
+                }
+            }
+    }
+}
+
 impl OccProcWorker {
     pub async fn main_routine(&self) {
         loop {
+            self.scheduler.poll_recvs();
+            self.scheduler.poll_sends();
             self.scheduler.poll_comm_chan();
+
             self.scheduler.yield_now(0).await;
         }
     }
 }
 
-async fn test() {
+pub async fn test() {
     // memdb
     let mut memdb = Arc::new(MemDB::new());
     let memstore = RobinhoodMemStore::<PhantomData<usize>>::new();
 
     Arc::get_mut(&mut memdb).unwrap().add_schema(0, TableSchema::default(), memstore);
-    // comm conn
+    // comm chan
+    let comm_chan = DocaCommChannel::new_server("cc_server\0", "03:00.0", "af:00.0");
+
+    // rdma conn
+    let mut rdma = RdmaControl::new(100);
+    rdma.connect(1, "10.10.10.7\0", "7472").unwrap();
+
     // scheduler
-    let mut comm_chan = DocaCommChannel::new_server("cc_server\0", "03:00.0", "af:00.0");
-
-    let rdma = RdmaControl::new(100);
-
     let allocator = rdma.get_allocator();
     let mut scheduler = Arc::new(AsyncScheduler::new(0, 1, &allocator));
 
+    // scheduler add comm chan
     unsafe {
         Arc::get_mut_unchecked(&mut scheduler).set_comm_chan(comm_chan);
     }
 
-    let worker = Arc::new(OccProcWorker::new(&memdb, &scheduler));
+    // scheduler add rdma conn
+    let conn = rdma.get_connection(1);
+    conn.lock().unwrap().init_and_start_recvs().unwrap();
+    conn.lock()
+        .unwrap()
+        .register_recv_callback(&scheduler)
+        .unwrap();
 
     unsafe {
+        Arc::get_mut_unchecked(&mut scheduler).append_conn(1, &conn);
+    }
+
+    // worker
+    let worker = Arc::new(OccProcWorker::new(&memdb, &scheduler));
+    // worker comm chan handler
+    unsafe {
         Arc::get_mut_unchecked(&mut scheduler).register_comm_handler(&worker);
+    }
+
+    // worker rdma conn handler
+    unsafe {
+        Arc::get_mut_unchecked(&mut scheduler).register_callback(&worker);
     }
 
     {
@@ -104,6 +169,7 @@ async fn test() {
         .unwrap();
     }
 }
+}
 
 
 fn main() {
@@ -112,6 +178,7 @@ fn main() {
         .build()
         .unwrap()
         .block_on(async move {
-            test().await;
+            #[cfg(feature = "doca_deps")]
+            test_dpu::test().await;
     });
 }

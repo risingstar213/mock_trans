@@ -98,7 +98,7 @@ async fn main() {
     // scheduler
     let mut rdma = RdmaControl::new(1);
     rdma.init("0.0.0.0\0", "7472\0");
-    rdma.listen_task();
+    rdma.listen_task(1);
 
     let allocator = rdma.get_allocator();
     let mut scheduler = Arc::new(AsyncScheduler::new(0, 1, &allocator));

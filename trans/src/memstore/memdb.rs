@@ -187,14 +187,14 @@ impl ValueDB
         self.tables[table_id].local_get_value(key, ptr, len)
     }
 
-    pub fn local_set_value(&self, table_id: usize, key: u64, ptr: *const u8, len: u32)
+    pub fn local_set_value(&self, table_id: usize, key: u64, ptr: *const u8, len: u32) -> bool
     {
         if table_id >= self.metas.len() {
             println!("the table does not exists!");
-            return;
+            return false;
         }
 
-        self.tables[table_id].local_set_value(key, ptr, len);
+        self.tables[table_id].local_set_value(key, ptr, len)
     }
 
     pub fn local_put_value(&self, table_id: usize, key: u64, ptr: *const u8, len: u32)

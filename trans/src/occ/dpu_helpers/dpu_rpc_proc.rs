@@ -16,7 +16,8 @@ use crate::MAIN_ROUTINE_ID;
 use crate::MAX_RESP_SIZE;
 
 use super::*;
-
+use super::super::remote_helpers::*;
+use super::super::remote_helpers::batch_rpc_msg_wrapper::{ BatchRpcReqWrapper, BatchRpcRespWrapper };
 
 pub struct DpuRpcProc {
     pub tid:        u32,
@@ -268,5 +269,357 @@ impl DpuRpcProc {
 
         self.scheduler.block_send_info(&mut comm_reply);
         self.scheduler.comm_chan_dealloc_buf(comm_reply);
+    }
+}
+
+impl DpuRpcProc {
+    pub fn read_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
+        
+        let mut comm_req = self.scheduler.comm_chan_alloc_buf();
+        comm_req.set_payload(0);
+
+        let trans_key = TransKey::new(self.tid, &meta);
+        self.trans_view.start_read_trans(&trans_key);
+        let mut read_cache_writer = self.trans_view.new_read_cache_writer(&trans_key, MAIN_ROUTINE_ID);
+
+        let req_header = req_wrapper.get_header();
+
+        for _ in 0..req_header.num {
+            let req_item = req_wrapper.get_item::<ReadReqItem>();
+
+            let meta = self.memdb.local_get_meta(
+                req_item.table_id, 
+                req_item.key, 
+            ).unwrap();
+
+            unsafe {
+                comm_req.append_item(req_item);
+            }
+
+            read_cache_writer.block_append_item(&self.trans_view, CacheReadSetItem{
+                table_id: req_item.table_id, 
+                key:      req_item.key,
+                old_seq:  meta.seq as u64,
+            });
+
+            req_wrapper.shift_to_next_item::<ReadReqItem>(0);
+        }
+
+        read_cache_writer.block_sync_buf(&self.trans_view);
+
+        let comm_payload = comm_req.get_payload();
+
+        comm_req.set_header(DocaCommHeaderMeta{
+            info_type: doca_comm_info_type::REQ,
+            info_id:   doca_comm_info_id::REMOTE_READ_INFO,
+            info_payload: comm_payload as u32,
+            info_pid: meta.peer_id as _,
+            info_cid: meta.rpc_cid,
+        });
+
+        self.scheduler.block_send_info(&mut comm_req);
+        self.scheduler.comm_chan_dealloc_buf(comm_req);
+
+    }
+
+    pub fn fetch_write_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
+
+        let mut comm_req = self.scheduler.comm_chan_alloc_buf();
+        comm_req.set_payload(0);
+
+        let trans_key = TransKey::new(self.tid, &meta);
+        self.trans_view.start_write_trans(&trans_key);
+        let mut write_cache_writer = self.trans_view.new_write_cache_writer(&trans_key, MAIN_ROUTINE_ID);
+
+        let req_header = req_wrapper.get_header();
+
+        let mut lock_success = true;
+        let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
+
+        for _ in 0..req_header.num {
+            let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
+
+            let meta = self.memdb.local_lock(
+                req_item.table_id, 
+                req_item.key, 
+                lock_content.to_content(),
+            ).unwrap();
+
+            if meta.lock != lock_content.to_content() {
+                lock_success = false;
+                break;
+            } else {
+                unsafe {
+                    comm_req.append_item(req_item);
+                }
+
+                write_cache_writer.block_append_item(&self.trans_view, CacheWriteSetItem{
+                    table_id: req_item.table_id, 
+                    key:      req_item.key,
+                    insert:   false,
+                });
+            }
+
+            req_wrapper.shift_to_next_item::<FetchWriteReqItem>(0);
+        }
+
+        write_cache_writer.block_sync_buf(&self.trans_view);
+
+        // 加锁成功，则向上递交 read 请求
+        if lock_success {
+            let comm_payload = comm_req.get_payload();
+
+            comm_req.set_header(DocaCommHeaderMeta{
+                info_type: doca_comm_info_type::REQ,
+                info_id:   doca_comm_info_id::REMOTE_READ_INFO,
+                info_payload: comm_payload as u32,
+                info_pid: meta.peer_id as _,
+                info_cid: meta.rpc_cid,
+            });
+
+            self.scheduler.block_send_info(&mut comm_req);
+            self.scheduler.comm_chan_dealloc_buf(comm_req);
+            return;
+        }
+        // 否则，直接返回错误信息
+        self.scheduler.comm_chan_dealloc_buf(comm_req);
+
+        let resp_buf = self.scheduler.get_reply_buf(0);
+        let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
+
+        for _ in 0..req_header.num {
+            let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
+            resp_wrapper.set_item(FetchWriteCacheRespItem{
+                update_idx: req_item.update_idx,
+                length: 0,
+            });
+
+            req_wrapper.shift_to_next_item::<FetchWriteReqItem>(0);
+            resp_wrapper.shift_to_next_item::<FetchWriteCacheRespItem>(0);
+        }
+
+        resp_wrapper.set_header(BatchRpcRespHeader {
+            write: true,
+            num: req_header.num,
+        });
+
+        self.scheduler.send_reply(
+            src_conn, 
+            resp_buf, 
+            occ_rpc_id::FETCHWRITE_RPC, 
+            resp_wrapper.get_off() as _, 
+            meta.rpc_cid, 
+            meta.peer_id, 
+            meta.peer_tid
+        );
+    }
+
+
+    pub fn lock_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
+        let resp_buf = self.scheduler.get_reply_buf(0);
+
+        let trans_key = TransKey::new(self.tid, &meta);
+        self.trans_view.start_write_trans(&trans_key);
+        let mut write_cache_writer = self.trans_view.new_write_cache_writer(&trans_key, MAIN_ROUTINE_ID);
+
+        let req_header = req_wrapper.get_header();
+
+        let mut success = true;
+        let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
+
+        for _ in 0..req_header.num {
+            let req_item = req_wrapper.get_item::<LockReqItem>();
+
+            let meta = self.memdb.local_lock(
+                req_item.table_id, 
+                req_item.key, 
+                lock_content.to_content(),
+            ).unwrap();
+
+            if meta.lock != lock_content.to_content() {
+                success = false;
+                break;
+            }
+
+            // remain bugs !!! seq num !!!
+            write_cache_writer.block_append_item(&self.trans_view, CacheWriteSetItem{
+                table_id: req_item.table_id, 
+                key:      req_item.key,
+                insert:   (meta.seq == 2),
+            });
+
+            req_wrapper.shift_to_next_item::<LockReqItem>(0);
+        }
+
+        write_cache_writer.block_sync_buf(&self.trans_view);
+
+        let reduce_resp = unsafe { (resp_buf as *mut BatchRpcReduceResp).as_mut().unwrap() };
+        *reduce_resp = BatchRpcReduceResp{
+            success: success
+        };
+
+        self.scheduler.send_reply(
+            src_conn, 
+            resp_buf, 
+            occ_rpc_id::LOCK_RPC, 
+            std::mem::size_of::<BatchRpcReduceResp>() as _, 
+            meta.rpc_cid, 
+            meta.peer_id, 
+            meta.peer_tid
+        );
+
+    }
+
+    pub fn validate_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        let resp_buf = self.scheduler.get_reply_buf(0);
+
+        let trans_key = TransKey::new(self.tid, &meta);
+        let buf_count = self.trans_view.get_read_range_num(&trans_key);
+
+        let mut success = true;
+        
+        for i in 0..buf_count {
+            let read_buf = self.trans_view.block_get_read_buf(&trans_key, i, meta.rpc_cid);
+
+            for item in read_buf.iter() {
+                let meta = self.memdb.local_get_meta(
+                    item.table_id, 
+                    item.key
+                ).unwrap();
+    
+                if meta.lock != 0 || (meta.seq != item.old_seq) {
+                    success = false;
+                    break;
+                }
+            }
+        }
+
+        self.trans_view.end_read_trans(&trans_key);
+
+        let reduce_resp = unsafe { (resp_buf as *mut BatchRpcReduceResp).as_mut().unwrap() };
+        *reduce_resp = BatchRpcReduceResp{
+            success: success
+        };
+
+        self.scheduler.send_reply(
+            src_conn, 
+            resp_buf, 
+            occ_rpc_id::VALIDATE_RPC, 
+            std::mem::size_of::<BatchRpcReduceResp>() as _, 
+            meta.rpc_cid, 
+            meta.peer_id, 
+            meta.peer_tid
+        );
+    }
+
+    pub fn release_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        // let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
+        let resp_buf = self.scheduler.get_reply_buf(0);
+
+        let trans_key = TransKey::new(self.tid, &meta);
+        let buf_count = self.trans_view.get_write_range_num(&trans_key);
+
+        let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
+
+        // unlock
+        for i in 0..buf_count {
+            let write_buf = self.trans_view.block_get_write_buf(&trans_key, i, 0);
+
+            for item in write_buf.iter() {
+                self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
+            }
+        }
+
+        self.trans_view.end_write_trans(&trans_key);
+
+        self.scheduler.send_reply(
+            src_conn, 
+            resp_buf, 
+            occ_rpc_id::RELEASE_RPC, 
+            0, 
+            meta.rpc_cid, 
+            meta.peer_id, 
+            meta.peer_tid
+        );
+    }
+
+    pub fn abort_cache_rpc_handler(
+        &self,
+        src_conn: &mut RdmaRcConn,
+        msg: *mut u8,
+        size: u32,
+        meta: RpcProcessMeta
+    ) {
+        // let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
+        let resp_buf = self.scheduler.get_reply_buf(0);
+
+        let trans_key = TransKey::new(self.tid, &meta);
+        let buf_count = self.trans_view.get_write_range_num(&trans_key);
+
+        let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
+
+        // unlock
+        for i in 0..buf_count {
+            let write_buf = self.trans_view.block_get_write_buf(&trans_key, i, 0);
+
+            for item in write_buf.iter() {
+                if item.insert {
+                    self.memdb.local_erase(item.table_id, item.key);
+                } else {
+                    self.memdb.local_unlock(
+                        item.table_id, 
+                        item.key, 
+                        lock_content.to_content(),
+                    );
+                }
+                
+                self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
+            }
+        }
+
+        self.trans_view.end_write_trans(&trans_key);
+
+        self.scheduler.send_reply(
+            src_conn, 
+            resp_buf, 
+            occ_rpc_id::ABORT_RPC, 
+            0, 
+            meta.rpc_cid, 
+            meta.peer_id, 
+            meta.peer_tid
+        );
     }
 }

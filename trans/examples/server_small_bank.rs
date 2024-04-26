@@ -20,7 +20,7 @@ async fn listen_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize, client:
     // scheduler
     let mut rdma = RdmaControl::new(1);
     rdma.init("0.0.0.0\0", CONN_PORTS[tid]);
-    rdma.listen_task();
+    rdma.listen_task(1);
 
     let allocator = rdma.get_allocator();
     let mut scheduler = Arc::new(AsyncScheduler::new(tid, 8, &allocator));
