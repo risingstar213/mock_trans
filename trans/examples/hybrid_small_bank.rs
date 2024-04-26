@@ -46,7 +46,7 @@ async fn connect_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize, client
         .register_recv_callback(&scheduler)
         .unwrap();
 
-    let worker = Arc::new(SmallBankWorker::new(0, tid as _, &memdb, &scheduler));
+    let worker = Arc::new(SmallBankWorker::new(1, tid as _, &memdb, &scheduler));
     unsafe {
         Arc::get_mut_unchecked(&mut scheduler).register_callback(&worker);
     }
@@ -56,7 +56,7 @@ async fn connect_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize, client
 
 fn main()
 {
-    let memdb = SmallBankLoader::new_memdb(0);
+    let memdb = SmallBankLoader::new_memdb(1);
     let mut sb_client = SmallBankClient::new();
 
     let mut rand_gen = FastRandom::new(23984543 + 0);

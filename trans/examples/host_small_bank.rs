@@ -28,7 +28,7 @@ async fn init_and_run(tid: usize, valuedb: Arc<ValueDB>, rand_seed: usize, clien
     let comm_chan = DocaCommChannel::new_client(COMM_NAMES[tid], "af:00.0");
 
     // rdma conn
-    let mut rdma = RdmaControl::new(1);
+    let mut rdma = RdmaControl::new(0);
     rdma.init("0.0.0.0\0", CONN_PORTS[tid]);
     rdma.listen_task(1);
 
@@ -54,7 +54,7 @@ async fn init_and_run(tid: usize, valuedb: Arc<ValueDB>, rand_seed: usize, clien
     }
     
     // worker
-    let worker = Arc::new(SmallBankHostWorker::new(1, tid as _, &valuedb, &scheduler));
+    let worker = Arc::new(SmallBankHostWorker::new(0, tid as _, &valuedb, &scheduler));
     // worker comm chan handler
     unsafe {
         Arc::get_mut_unchecked(&mut scheduler).register_comm_handler(&worker);
