@@ -385,7 +385,7 @@ impl DpuRpcProc {
 
             comm_req.set_header(DocaCommHeaderMeta{
                 info_type: doca_comm_info_type::REQ,
-                info_id:   doca_comm_info_id::REMOTE_READ_INFO,
+                info_id:   doca_comm_info_id::REMOTE_FETCHWRITE_INFO,
                 info_payload: comm_payload as u32,
                 info_pid: meta.peer_id as _,
                 info_cid: meta.rpc_cid,
