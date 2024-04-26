@@ -259,4 +259,72 @@ impl SmallBankWorker {
 
         let _ = txn.is_commited();
     }
+
+    pub async fn txn_exchange(&self, rand_gen: &mut FastRandom, cid: u32) {
+        let lid = rand_gen.next() % 4;
+        let mut rid = lid;
+
+        while lid == rid {
+            rid = rand_gen.next() % 4;
+        }
+
+        let mut txn = OccHybrid::<SMALL_BANK_MAX_ITEM_SIZE>::new(
+            self.part_id, 
+            self.tid,
+            cid, 
+            &self.memdb, 
+            &self.scheduler,
+        );
+
+        txn.fetch_write::<SmallBankChecking>(
+            small_bank_table_id::CHECKING_TABLE_ID,
+            account_to_part(lid) as _,
+            lid as _,
+        );
+
+        txn.fetch_write::<SmallBankChecking>(
+            small_bank_table_id::CHECKING_TABLE_ID,
+            account_to_part(rid) as _,
+            rid as _,
+        );
+
+        let lvalue = txn.get_value::<SmallBankChecking>(true, 0).await.c_balance;
+        let rvalue = txn.get_value::<SmallBankChecking>(true, 1).await.c_balance;
+    
+        txn.set_value(true, 0, &SmallBankChecking{ c_balance: rvalue });
+        txn.set_value(true, 1, &SmallBankChecking{ c_balance: lvalue });
+
+        txn.commit().await;
+
+        let _ = txn.is_commited();
+    }
+
+    pub async fn txn_exchange_check(&self, rand_gen: &mut FastRandom, cid: u32) {
+        let mut txn = OccHybrid::<SMALL_BANK_MAX_ITEM_SIZE>::new(
+            self.part_id, 
+            self.tid,
+            cid, 
+            &self.memdb, 
+            &self.scheduler,
+        );
+
+        for i in 0..4 {
+            txn.read::<SmallBankChecking>(small_bank_table_id::CHECKING_TABLE_ID,
+                account_to_part(i) as _,
+                i as _,
+            );
+        }
+        let mut values = Vec::new();
+
+        for i in 0..4 {
+            let value = txn.get_value::<SmallBankChecking>(false, i).await.c_balance;
+            values.push(value);
+        }
+
+        txn.commit().await;
+
+        if txn.is_commited() {
+            println!("check: {} {} {} {}", values[0], values[1], values[2], values[3]);
+        }
+    }
 }

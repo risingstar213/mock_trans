@@ -93,6 +93,12 @@ impl SmallBankWorker {
                 SmallBankWordLoadId::TxnAmalgamate => {
                     self.txn_amalgamate(&mut rand_gen, cid).await;
                 }
+                SmallBankWordLoadId::TxnExchange => {
+                    self.txn_exchange(&mut rand_gen, cid).await;
+                }
+                SmallBankWordLoadId::TxnExchangeCheck => {
+                    self.txn_exchange_check(&mut rand_gen, cid).await;
+                }
             }
         }
     }

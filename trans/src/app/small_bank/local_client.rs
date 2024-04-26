@@ -58,18 +58,35 @@ impl SmallBankClient {
         }).await.unwrap();
     }
 
+    async fn send_workload_test(&self, rand_gen: &mut FastRandom) {
+        let num_thread = self.senders.len();
+        let tid = rand_gen.next() % num_thread;
+
+        let d = rand_gen.next() % 5000;
+
+        if d > 0 {
+            self.senders[tid].lock().unwrap().send(SmallBankClientReq{
+                workload: SmallBankWordLoadId::from(6),
+            }).await.unwrap();
+        } else {
+            self.senders[tid].lock().unwrap().send(SmallBankClientReq{
+                workload: SmallBankWordLoadId::from(7),
+            }).await.unwrap();
+        }
+    }
+
     pub async fn work_loop(&self, rand_seed: usize) {
         let mut count = 0;
         let start_time = SystemTime::now();
         let mut rand_gen = FastRandom::new(rand_seed);
         loop {
-            self.send_workload(&mut rand_gen).await;
+            self.send_workload_test(&mut rand_gen).await;
             count += 1;
 
             if count % 10000 == 0 {
                 let now_time = SystemTime::now();
                 let duration = now_time.duration_since(start_time).unwrap();
-                println!("{}, {}", count, duration.as_millis());
+                // println!("{}, {}", count, duration.as_millis());
             }
             // sleep(Duration::from_millis(1)).await;
         }

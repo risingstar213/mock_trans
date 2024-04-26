@@ -65,7 +65,7 @@ const MAIN_ROUTINE_ID: u32 = 0;
 
 /////////////////// Small Bank Wokeloads //////////////
 const SMALL_BANK_NROUTINES: usize = 8;
-pub const SMALL_BANK_NTHREADS: usize = 1;
+pub const SMALL_BANK_NTHREADS: usize = 8;
 const SMALL_BANK_NPARTITIONS:  usize = 2;
 const SMALL_BANK_DEFAULT_NACCOUNTS: usize = 1000;
 const SMALL_BANK_DEFAULT_NHOTACCOUTS: usize = 40;

@@ -54,6 +54,8 @@ pub enum SmallBankWordLoadId {
     TxnTransactSavings,
     TxnWriteCheck,
     TxnAmalgamate,
+    TxnExchange,
+    TxnExchangeCheck,
 }
 
 impl From<usize> for SmallBankWordLoadId {
@@ -65,6 +67,8 @@ impl From<usize> for SmallBankWordLoadId {
             3 => SmallBankWordLoadId::TxnTransactSavings,
             4 => SmallBankWordLoadId::TxnWriteCheck,
             5 => SmallBankWordLoadId::TxnAmalgamate,
+            6 => SmallBankWordLoadId::TxnExchange,
+            7 => SmallBankWordLoadId::TxnExchangeCheck,
             _ => panic!("unsupported"),
         }
     }
