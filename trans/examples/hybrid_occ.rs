@@ -166,8 +166,8 @@ async fn test() {
 
     // scheduler
     let mut rdma = RdmaControl::new(1);
-    rdma.init("0.0.0.0\0", "7472\0");
-    rdma.listen_task(2);
+    rdma.connect(0, "10.10.10.6\0", "7472\0").unwrap();
+    rdma.connect(100, "10.10.10.26\0", "7472\0").unwrap();
 
     let allocator = rdma.get_allocator();
     let mut scheduler = Arc::new(AsyncScheduler::new(0, 3, &allocator));
