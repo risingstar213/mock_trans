@@ -221,12 +221,12 @@ pub async fn test() {
     
     Arc::get_mut(&mut valuedb).unwrap().add_schema(0, TableSchema::default(), valuestore);
 
+    // rdma conn
+    let mut rdma = RdmaControl::new(0);
+    rdma.connect(1, "10.10.10.7\0", "7472").unwrap();
+
     // comm chan
     let comm_chan = DocaCommChannel::new_client("cc_server\0", "af:00.0");
-
-        // rdma conn
-    let mut rdma = RdmaControl::new(100);
-    rdma.connect(1, "10.10.10.7\0", "7472").unwrap();
 
     // scheduler
     let allocator = rdma.get_allocator();
