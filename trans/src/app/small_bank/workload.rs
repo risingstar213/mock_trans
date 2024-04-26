@@ -312,6 +312,8 @@ impl SmallBankWorker {
 
         txn.start();
 
+        let start_time = std::time::SystemTime::now();
+
         for i in 0..4 {
             txn.read::<SmallBankChecking>(small_bank_table_id::CHECKING_TABLE_ID,
                 account_to_part(i) as _,
@@ -327,8 +329,13 @@ impl SmallBankWorker {
 
         txn.commit().await;
 
+        let end_time = std::time::SystemTime::now();
+
+
         if txn.is_commited() {
-            println!("check: {} {} {} {}", values[0], values[1], values[2], values[3]);
+            println!("check: commit {}", end_time.duration_since(start_time).unwrap().as_millis());
+        } else {
+            println!("check: abort {}", end_time.duration_since(start_time).unwrap().as_millis());
         }
     }
 }
