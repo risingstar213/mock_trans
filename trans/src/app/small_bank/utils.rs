@@ -54,8 +54,8 @@ lazy_static! {
 }
 
 pub fn account_to_part(account: usize) -> usize {
-    let mut hasher = HASH_BUILDER.build_hasher();
-    account.hash(&mut hasher);
+    // let mut hasher = HASH_BUILDER.build_hasher();
+    // account.hash(&mut hasher);
 
-    hasher.finish() as usize % SMALL_BANK_NPARTITIONS
+    account % SMALL_BANK_NPARTITIONS
 }
