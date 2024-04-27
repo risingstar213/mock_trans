@@ -1,3 +1,5 @@
+use std::sync::RwLock;
+
 use super::robinhood::robinhoodcell::RobinHoodTableCell;
 use super::memstore::{MemNode, MemNodeMeta, MemStore, MemStoreValue};
 
@@ -5,7 +7,7 @@ pub struct RobinhoodMemStore<T>
 where
     T: MemStoreValue,
 {
-    table: RobinHoodTableCell<T>,
+    table: RwLock<RobinHoodTableCell<T>>,
 }
 
 impl<T> RobinhoodMemStore<T> 
@@ -14,7 +16,7 @@ where
 {
     pub fn new() -> Self {
         Self {
-            table: RobinHoodTableCell::<T>::new()
+            table: RwLock::new(RobinHoodTableCell::<T>::new())
         }
     }
 }
@@ -27,33 +29,19 @@ where
     fn get_item_length(&self) -> usize {
         std::mem::size_of::<T>()
     }
-    
-    fn lock_shared(&self) {
-        self.table.rlock();
-    }
-    fn unlock_shared(&self) {
-        self.table.runlock();
-    }
-    fn lock_exclusive(&self) {
-        self.table.wlock();
-    }
-    fn unlock_exclusive(&self) {
-        self.table.wunlock();
-    }
 
     fn local_get_meta(&self, key: u64) -> Option<MemNodeMeta> {
         let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
-        self.table.rlock();
+        let table = self.table.read().unwrap();
 
-        match self.table.get(key) {
+        match table.get(key) {
             Some(node) => {
                 ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
             }
             None => {}
         }
 
-        self.table.runlock();
         ret
     }
 
@@ -65,9 +53,9 @@ where
         let value = unsafe { (ptr as *mut T).as_mut().unwrap() };
         let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
-        self.table.rlock();
+        let table = self.table.read().unwrap();
 
-        match self.table.get(key) {
+        match table.get(key) {
             Some(node) => {
                 *value = node.get_value().clone();
                 ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
@@ -75,7 +63,6 @@ where
             None => {}
         }
 
-        self.table.runlock();
         ret
     }
 
@@ -93,9 +80,9 @@ where
         let value = unsafe { (ptr as *mut T).as_mut().unwrap() };
         let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
-        self.table.rlock();
+        let table = self.table.read().unwrap();
 
-        match self.table.get(key) {
+        match table.get(key) {
             Some(node) => {
                 if node.try_lock(lock_content) {
                     *value = node.get_value().clone();
@@ -105,7 +92,6 @@ where
             None => {}
         }
 
-        self.table.runlock();
         ret
     }
 
@@ -113,9 +99,10 @@ where
         let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
         let mut need_insert = false;
-        self.table.rlock();
+        
+        let table = self.table.read().unwrap();
 
-        match self.table.get(key) {
+        match table.get(key) {
             Some(node) => {
                 node.try_lock(lock_content);
                 ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
@@ -125,35 +112,34 @@ where
             }
         }
 
-        self.table.runlock();
+        drop(table);
 
         if !need_insert {
             return ret;
         }
 
-        self.table.wlock();
+        let table = self.table.write().unwrap();
 
-        match self.table.get(key) {
+        match table.get(key) {
             Some(node) => {
                 node.try_lock(lock_content);
                 ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
             }
             None => {
                 let node = MemNode::new_zero(lock_content, 2);
-                self.table.put(key, &node);
+                table.put(key, &node);
                 ret = Some(MemNodeMeta::new(lock_content, 2))
             }
         }
 
-        self.table.wunlock();
         ret
     }
 
     fn local_unlock(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta> {
         let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
-        self.table.rlock();
-        match self.table.get(key) {
+        let table = self.table.read().unwrap();
+        match table.get(key) {
             Some(node) => {
                 node.try_unlock(lock_content);
                 ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
@@ -161,7 +147,6 @@ where
             None => {}
         }
 
-        self.table.runlock();
         ret
     }
 
@@ -171,11 +156,11 @@ where
         if std::mem::size_of::<T>() > len as usize {
             panic!("upd length is not rational!");
         }
-        self.table.rlock();
+        let table = self.table.read().unwrap();
 
         let value = unsafe { (ptr as *const T).as_ref().unwrap() };
 
-        match self.table.get(key) {
+        match table.get(key) {
             Some(node) => {
                 node.set_value(value);
                 node.advance_seq();
@@ -184,22 +169,20 @@ where
             None => {}
         }
 
-        self.table.runlock();
         ret
     }
 
     fn local_erase(&self, key: u64) -> Option<MemNodeMeta> {
         let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
-        self.table.wlock();
+        let table = self.table.write().unwrap();
 
-        match self.table.erase(key) {
+        match table.erase(key) {
             Some(node) => {
                 ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
             }
             None => {}
         }
 
-        self.table.wunlock();
         ret
     }
 }

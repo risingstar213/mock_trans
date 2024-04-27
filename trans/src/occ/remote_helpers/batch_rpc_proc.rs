@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::cell::UnsafeCell;
 
 use tokio::sync::mpsc;
 
@@ -24,8 +25,11 @@ pub struct BatchRpcProc {
     pub tid:        u32,
     pub memdb:      Arc<MemDB>,
     pub scheduler:  Arc<AsyncScheduler>,
-    pub trans_view: TransCacheView
+    pub trans_view: UnsafeCell<TransCacheView>,
 }
+
+unsafe impl Send for BatchRpcProc {}
+unsafe impl Sync for BatchRpcProc {}
 
 impl BatchRpcProc {
     pub fn new(tid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
@@ -33,7 +37,7 @@ impl BatchRpcProc {
             tid: tid,
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
-            trans_view: TransCacheView::new(scheduler),
+            trans_view: UnsafeCell::new(TransCacheView::new(scheduler)),
         }
     }
 }
@@ -382,8 +386,9 @@ impl BatchRpcProc {
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
         
         let trans_key = TransKey::new(self.tid, &meta);
-        self.trans_view.start_read_trans(&trans_key);
-        let mut read_cache_writer = self.trans_view.new_read_cache_writer(&trans_key, MAIN_ROUTINE_ID);
+        let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
+        trans_view.start_read_trans(&trans_key);
+        let mut read_cache_writer = trans_view.new_read_cache_writer(&trans_key, MAIN_ROUTINE_ID);
 
         let req_header = req_wrapper.get_header();
 
@@ -403,7 +408,7 @@ impl BatchRpcProc {
                 length:   data_len,
             });
 
-            read_cache_writer.block_append_item(&self.trans_view, CacheReadSetItem{
+            read_cache_writer.block_append_item(trans_view, CacheReadSetItem{
                 table_id: req_item.table_id, 
                 key:      req_item.key,
                 old_seq:  meta.seq as u64,
@@ -413,7 +418,7 @@ impl BatchRpcProc {
             resp_wrapper.shift_to_next_item::<ReadCacheRespItem>(data_len);
         }
 
-        read_cache_writer.block_sync_buf(&self.trans_view);
+        read_cache_writer.block_sync_buf(trans_view);
 
         // println!("read key: {:?}, count: {}", trans_key, req_header.num);
 
@@ -446,8 +451,9 @@ impl BatchRpcProc {
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
 
         let trans_key = TransKey::new(self.tid, &meta);
-        self.trans_view.start_write_trans(&trans_key);
-        let mut write_cache_writer = self.trans_view.new_write_cache_writer(&trans_key, MAIN_ROUTINE_ID);
+        let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
+        trans_view.start_write_trans(&trans_key);
+        let mut write_cache_writer = trans_view.new_write_cache_writer(&trans_key, MAIN_ROUTINE_ID);
 
         let req_header = req_wrapper.get_header();
 
@@ -477,7 +483,7 @@ impl BatchRpcProc {
                     length: data_len,
                 });
 
-                write_cache_writer.block_append_item(&self.trans_view, CacheWriteSetItem{
+                write_cache_writer.block_append_item(trans_view, CacheWriteSetItem{
                     table_id: req_item.table_id, 
                     key:      req_item.key,
                     insert:   false,
@@ -488,7 +494,7 @@ impl BatchRpcProc {
             resp_wrapper.shift_to_next_item::<FetchWriteCacheRespItem>(data_len);
         }
 
-        write_cache_writer.block_sync_buf(&self.trans_view);
+        write_cache_writer.block_sync_buf(trans_view);
 
         resp_wrapper.set_header(BatchRpcRespHeader {
             write: true,
@@ -519,8 +525,9 @@ impl BatchRpcProc {
         let resp_buf = self.scheduler.get_reply_buf(0);
 
         let trans_key = TransKey::new(self.tid, &meta);
-        self.trans_view.start_write_trans(&trans_key);
-        let mut write_cache_writer = self.trans_view.new_write_cache_writer(&trans_key, MAIN_ROUTINE_ID);
+        let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
+        trans_view.start_write_trans(&trans_key);
+        let mut write_cache_writer = trans_view.new_write_cache_writer(&trans_key, MAIN_ROUTINE_ID);
 
         let req_header = req_wrapper.get_header();
 
@@ -542,7 +549,7 @@ impl BatchRpcProc {
             }
 
             // remain bugs !!! seq num !!!
-            write_cache_writer.block_append_item(&self.trans_view, CacheWriteSetItem{
+            write_cache_writer.block_append_item(trans_view, CacheWriteSetItem{
                 table_id: req_item.table_id, 
                 key:      req_item.key,
                 insert:   (meta.seq == 2),
@@ -551,7 +558,7 @@ impl BatchRpcProc {
             req_wrapper.shift_to_next_item::<LockReqItem>(0);
         }
 
-        write_cache_writer.block_sync_buf(&self.trans_view);
+        write_cache_writer.block_sync_buf(trans_view);
 
         let reduce_resp = unsafe { (resp_buf as *mut BatchRpcReduceResp).as_mut().unwrap() };
         *reduce_resp = BatchRpcReduceResp{
@@ -580,12 +587,13 @@ impl BatchRpcProc {
         let resp_buf = self.scheduler.get_reply_buf(0);
 
         let trans_key = TransKey::new(self.tid, &meta);
-        let buf_count = self.trans_view.get_read_range_num(&trans_key);
+        let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
+        let buf_count = trans_view.get_read_range_num(&trans_key);
 
         let mut success = true;
         
         for i in 0..buf_count {
-            let read_buf = self.trans_view.block_get_read_buf(&trans_key, i, meta.rpc_cid);
+            let read_buf = trans_view.block_get_read_buf(&trans_key, i, meta.rpc_cid);
 
             for item in read_buf.iter() {
                 let meta = self.memdb.local_get_meta(
@@ -602,7 +610,7 @@ impl BatchRpcProc {
             // println!("validate key: {:?}, count: {}, success: {}", trans_key, read_buf.len(), success);
         }
 
-        self.trans_view.end_read_trans(&trans_key);
+        trans_view.end_read_trans(&trans_key);
 
         let reduce_resp = unsafe { (resp_buf as *mut BatchRpcReduceResp).as_mut().unwrap() };
         *reduce_resp = BatchRpcReduceResp{
@@ -633,10 +641,11 @@ impl BatchRpcProc {
         // let req_header = req_wrapper.get_header();
     
         let trans_key = TransKey::new(self.tid, &meta);
-        let buf_count = self.trans_view.get_write_range_num(&trans_key);
+        let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
+        let buf_count = trans_view.get_write_range_num(&trans_key);
     
         for i in 0..buf_count {
-            let write_buf = self.trans_view.block_get_write_buf(&trans_key, i, 0);
+            let write_buf = trans_view.block_get_write_buf(&trans_key, i, 0);
 
             for item in write_buf.iter() {
                 let req_item = req_wrapper.get_item::<CommitCacheReqItem>();
@@ -679,20 +688,21 @@ impl BatchRpcProc {
         let resp_buf = self.scheduler.get_reply_buf(0);
 
         let trans_key = TransKey::new(self.tid, &meta);
-        let buf_count = self.trans_view.get_write_range_num(&trans_key);
+        let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
+        let buf_count = trans_view.get_write_range_num(&trans_key);
 
         let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
 
         // unlock
         for i in 0..buf_count {
-            let write_buf = self.trans_view.block_get_write_buf(&trans_key, i, 0);
+            let write_buf = trans_view.block_get_write_buf(&trans_key, i, 0);
 
             for item in write_buf.iter() {
                 self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
             }
         }
 
-        self.trans_view.end_write_trans(&trans_key);
+        trans_view.end_write_trans(&trans_key);
 
         self.scheduler.send_reply(
             src_conn, 
@@ -716,13 +726,14 @@ impl BatchRpcProc {
         let resp_buf = self.scheduler.get_reply_buf(0);
 
         let trans_key = TransKey::new(self.tid, &meta);
-        let buf_count = self.trans_view.get_write_range_num(&trans_key);
+        let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
+        let buf_count = trans_view.get_write_range_num(&trans_key);
 
         let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
 
         // unlock
         for i in 0..buf_count {
-            let write_buf = self.trans_view.block_get_write_buf(&trans_key, i, 0);
+            let write_buf = trans_view.block_get_write_buf(&trans_key, i, 0);
 
             for item in write_buf.iter() {
                 if item.insert {
@@ -739,7 +750,7 @@ impl BatchRpcProc {
             }
         }
 
-        self.trans_view.end_write_trans(&trans_key);
+        trans_view.end_write_trans(&trans_key);
 
         self.scheduler.send_reply(
             src_conn, 

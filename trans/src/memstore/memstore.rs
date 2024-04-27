@@ -139,11 +139,6 @@ pub trait MemStore {
     // for remote operation
     fn get_item_length(&self) -> usize;
 
-    fn lock_shared(&self);
-    fn unlock_shared(&self);
-    fn lock_exclusive(&self);
-    fn unlock_exclusive(&self);
-
     fn local_get_meta(&self, key: u64) -> Option<MemNodeMeta>;
     fn local_get_readonly(&self, key: u64, ptr: *mut u8, len: u32) -> Option<MemNodeMeta>;
     fn local_get_for_upd(

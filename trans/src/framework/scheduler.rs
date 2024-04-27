@@ -1,3 +1,4 @@
+use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::sync::{Arc, Weak};
 use std::sync::Mutex;
@@ -78,10 +79,10 @@ pub struct AsyncScheduler {
     conns: HashMap<u64, Arc<Mutex<RdmaRcConn>>>,
     //  read / write (one-side primitives)
     // pending for coroutines
-    pendings: Mutex<Vec<u32>>,
+    pendings: UnsafeCell<Vec<u32>>,
 
     // rpcs (two-sides primitives)
-    reply_metas: Mutex<ReplyMeta>,
+    reply_metas: UnsafeCell<ReplyMeta>,
 
     // callbacks
     callback: Weak<dyn RpcHandler + Send + Sync + 'static>,
@@ -89,13 +90,13 @@ pub struct AsyncScheduler {
     #[cfg(feature = "doca_deps")]
     dma_conn: Option<Arc<Mutex<DocaDmaConn>>>,
     #[cfg(feature = "doca_deps")]
-    dma_meta: Mutex<Vec<DmaMeta>>,
+    dma_meta: UnsafeCell<Vec<DmaMeta>>,
     #[cfg(feature = "doca_deps")]
     comm_chan: Option<DocaCommChannel>,
     #[cfg(feature = "doca_deps")]
     comm_handler: Weak<dyn DocaCommHandler + Send + Sync + 'static>,
     #[cfg(feature = "doca_deps")]
-    comm_replys: Mutex<Vec<DocaCommReply>>,
+    comm_replys: UnsafeCell<Vec<DocaCommReply>>,
 }
 
 // 手动标记 Send + Sync
@@ -114,8 +115,8 @@ impl AsyncScheduler {
             tid: tid,
             allocator: Mutex::new(RpcBufAllocator::new(routine_num, allocator)),
             conns: HashMap::new(),
-            pendings: Mutex::new(pendings),
-            reply_metas: Mutex::new(ReplyMeta::new(routine_num)),
+            pendings: UnsafeCell::new(pendings),
+            reply_metas: UnsafeCell::new(ReplyMeta::new(routine_num)),
 
             // callbacks
             callback: Arc::downgrade(&DEFAULT_RPC_HANDLER) as _,
@@ -123,13 +124,13 @@ impl AsyncScheduler {
             #[cfg(feature = "doca_deps")]
             dma_conn: None,
             #[cfg(feature = "doca_deps")]
-            dma_meta: Mutex::new(dma_meta),
+            dma_meta: UnsafeCell::new(dma_meta),
             #[cfg(feature = "doca_deps")]
             comm_chan: None,
             #[cfg(feature = "doca_deps")]
             comm_handler: Arc::downgrade(&DEFAULT_DOCA_CONN_HANDLER) as _,
             #[cfg(feature = "doca_deps")]
-            comm_replys: Mutex::new(Vec::new()),
+            comm_replys: UnsafeCell::new(Vec::new()),
         }
     }
 
@@ -177,7 +178,7 @@ impl AsyncScheduler {
     }
 
     pub fn prepare_multi_replys(&self, cid: u32, reply_buf: *mut u8, reply_count: u32) {
-        let mut reply_metas = self.reply_metas.lock().unwrap();
+        let reply_metas = unsafe { self.reply_metas.get().as_mut().unwrap() };
         if let Some(mut_count) = reply_metas.reply_counts.get_mut::<usize>(cid as _) {
             *mut_count = reply_count;
         }
@@ -215,7 +216,7 @@ impl RdmaRecvCallback for AsyncScheduler {
             }
             rpc_msg_type::RESP => {
                 let index = meta.rpc_cid as usize;
-                let mut reply_metas = self.reply_metas.lock().unwrap();
+                let reply_metas = unsafe { self.reply_metas.get().as_mut().unwrap() };
 
                 let buf = *reply_metas.reply_bufs.get::<usize>(index).unwrap();
                 unsafe {
@@ -316,9 +317,9 @@ impl AsyncRpc for AsyncScheduler {
 #[cfg(feature = "doca_deps")]
 impl AsyncScheduler {
     pub fn set_dma_conn(&mut self, dma_conn: &Arc<Mutex<DocaDmaConn>>) {
-        let routine_num = self.pendings.lock().unwrap().len();
+        let routine_num = self.pendings.get_mut().len();
         for _ in 0..routine_num {
-            self.dma_meta.lock().unwrap().push(DmaMeta(DmaStatus::DmaIdle));
+            self.dma_meta.get_mut().push(DmaMeta(DmaStatus::DmaIdle));
         }
         self.dma_conn = Some(dma_conn.clone());
     }
@@ -332,9 +333,8 @@ impl AsyncScheduler {
             .unwrap()
             .post_read_dma_reqs(local_offset, remote_offset, payload, cid as _);
 
-        if let Some(status) = self.dma_meta.lock().unwrap().get_mut::<usize>(cid as _) {
-            status.0 = DmaStatus::DmaWaiting;
-        }
+        let dma_meta = unsafe { self.dma_meta.get().as_mut().unwrap() };
+        dma_meta[cid as usize].0 = DmaStatus::DmaWaiting;
     }
 
     #[inline]
@@ -346,9 +346,8 @@ impl AsyncScheduler {
             .unwrap()
             .post_write_dma_reqs(local_offset, remote_offset, payload, cid as _);
 
-            if let Some(status) = self.dma_meta.lock().unwrap().get_mut::<usize>(cid as _) {
-                status.0 = DmaStatus::DmaWaiting;
-            }
+        let dma_meta = unsafe { self.dma_meta.get().as_mut().unwrap() };
+        dma_meta[cid as usize].0 = DmaStatus::DmaWaiting;
     }
 
     #[inline]
@@ -364,18 +363,16 @@ impl AsyncScheduler {
             match error {
                 DOCAError::DOCA_SUCCESS => {
                     let cid: usize = event.user_mark() as _;
-                    if let Some(status) = self.dma_meta.lock().unwrap().get_mut::<usize>(cid) {
-                        status.0 = DmaStatus::DmaIdle;
-                    }
+                    let dma_meta = unsafe { self.dma_meta.get().as_mut().unwrap() };
+                    dma_meta[cid as usize].0 = DmaStatus::DmaIdle;
                 }
                 DOCAError::DOCA_ERROR_AGAIN => {
                     break;
                 }
                 _ => {
                     let cid: usize = event.user_mark() as _;
-                    if let Some(status) = self.dma_meta.lock().unwrap().get_mut::<usize>(cid) {
-                        status.0 = DmaStatus::DmaError;
-                    }
+                    let dma_meta = unsafe { self.dma_meta.get().as_mut().unwrap() };
+                    dma_meta[cid as usize].0 = DmaStatus::DmaError;
                 }
             }
         }
@@ -383,7 +380,7 @@ impl AsyncScheduler {
 
     pub fn busy_until_dma_ready(&self, cid: u32) -> Result<(), ()> {
         loop {
-            let status = self.dma_meta.lock().unwrap().get::<usize>(cid as _).unwrap().0;
+            let status = unsafe{ self.dma_meta.get().as_mut().unwrap().get::<usize>(cid as _).unwrap().0 };
             match status {
                 DmaStatus::DmaIdle => {
                     return Ok(());
@@ -400,7 +397,7 @@ impl AsyncScheduler {
 
     pub async fn yield_until_dma_ready(&self, cid: u32) -> Result<(), ()> {
         loop {
-            let status = self.dma_meta.lock().unwrap().get::<usize>(cid as _).unwrap().0;
+            let status = unsafe{ self.dma_meta.get().as_mut().unwrap().get::<usize>(cid as _).unwrap().0 };
             match status {
                 DmaStatus::DmaIdle => {
                     return Ok(());
@@ -434,9 +431,9 @@ impl AsyncScheduler {
 #[cfg(feature = "doca_deps")]
 impl AsyncScheduler {
     pub fn set_comm_chan(&mut self, chan: DocaCommChannel) {
-        let routine_num = self.pendings.lock().unwrap().len();
+        let routine_num = self.pendings.get_mut().len();
         for _ in 0..routine_num {
-            self.comm_replys.lock().unwrap().push(DocaCommReply::new());
+            self.comm_replys.get_mut().push(DocaCommReply::new());
         }
         self.comm_chan = Some(chan)
     }
@@ -460,7 +457,8 @@ impl AsyncScheduler {
     }
 
     pub fn prepare_comm_replys(&self, cid: u32, count: usize) {
-        self.comm_replys.lock().unwrap()[cid as usize].reset(count);
+        let comm_replys = unsafe { self.comm_replys.get().as_mut().unwrap() };
+        comm_replys[cid as usize].reset(count);
     }
 
     pub fn poll_comm_chan(&self) {
@@ -483,7 +481,7 @@ impl AsyncScheduler {
                     );
                 }
                 doca_comm_info_type::REPLY => {
-                    let mut replys = self.comm_replys.lock().unwrap();
+                    let replys = unsafe { self.comm_replys.get().as_mut().unwrap() };
                     
                     let write_ptr = unsafe { replys[header.info_cid as usize].get_mut_ptr() };
                     unsafe {
@@ -500,11 +498,12 @@ impl AsyncScheduler {
 
     pub async fn yield_until_comm_ready(&self, cid: u32) -> DocaCommReplyWrapper {
         loop {
-            if self.comm_replys.lock().unwrap()[cid as usize].get_pending_count() > 0 {
+            let comm_replys = unsafe { self.comm_replys.get().as_mut().unwrap() };
+            if comm_replys[cid as usize].get_pending_count() > 0 {
                 self.yield_now(cid).await;
             } else {
                 unsafe {
-                    let ptr = self.comm_replys.lock().unwrap()[cid as usize].get_const_head_ptr();
+                    let ptr = comm_replys[cid as usize].get_const_head_ptr();
                     return DocaCommReplyWrapper::new(ptr);
                 }
             }
@@ -522,20 +521,9 @@ impl AsyncScheduler {
 
     pub async fn yield_until_ready(&self, cid: u32) {
         loop {
-            let pendings = *self
-                .pendings
-                .lock()
-                .unwrap()
-                .get::<usize>(cid as _)
-                .unwrap();
-            let reply_counts = *self
-                .reply_metas
-                .lock()
-                .unwrap()
-                .reply_counts
-                .get::<usize>(cid as _)
-                .unwrap();
-            if pendings == 0 && reply_counts == 0 {
+            let pendings = unsafe { self.pendings.get().as_ref().unwrap() };
+            let reply_counts = unsafe { &self.reply_metas.get().as_ref().unwrap().reply_counts };
+            if pendings[cid as usize] == 0 && reply_counts[cid as usize] == 0 {
                 break;
             }
             self.yield_now(cid).await;

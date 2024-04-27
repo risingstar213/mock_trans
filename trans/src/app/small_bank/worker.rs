@@ -37,25 +37,25 @@ impl RpcHandler for SmallBankWorker {
     ) {
         match rpc_id {
             occ_rpc_id::READ_RPC => {
-                self.proc.read_cache_rpc_handler(src_conn, msg, size, meta);
+                self.proc.read_rpc_handler(src_conn, msg, size, meta);
             }
             occ_rpc_id::FETCHWRITE_RPC => {
-                self.proc.fetch_write_cache_rpc_handler(src_conn, msg, size, meta);
+                self.proc.fetch_write_rpc_handler(src_conn, msg, size, meta);
             }
             occ_rpc_id::LOCK_RPC => {
-                self.proc.lock_cache_rpc_handler(src_conn, msg, size, meta);
+                self.proc.lock_rpc_handler(src_conn, msg, size, meta);
             }
             occ_rpc_id::VALIDATE_RPC => {
-                self.proc.validate_cache_rpc_handler(src_conn, msg, size, meta);
+                self.proc.validate_rpc_handler(src_conn, msg, size, meta);
             }
             occ_rpc_id::COMMIT_RPC => {
-                self.proc.commit_cache_rpc_handler(src_conn, msg, size, meta);
+                self.proc.commit_rpc_handler(src_conn, msg, size, meta);
             }
             occ_rpc_id::RELEASE_RPC => {
-                self.proc.release_cache_rpc_handler(src_conn, msg, size, meta);
+                self.proc.release_rpc_handler(src_conn, msg, size, meta);
             }
             occ_rpc_id::ABORT_RPC => {
-                self.proc.abort_cache_rpc_handler(src_conn, msg, size, meta);
+                self.proc.abort_rpc_handler(src_conn, msg, size, meta);
             }
             _ => {
                 unimplemented!();

@@ -122,48 +122,48 @@ impl CacheMeta {
 }
 
 pub struct TransCacheView {
-    local_alloc: Mutex<LocalCacheBufAllocator>,
-    trans_read_map: Mutex<HashMap<TransKey, Vec<CacheMeta>>>,
-    trans_write_map: Mutex<HashMap<TransKey, Vec<CacheMeta>>>,
+    local_alloc: LocalCacheBufAllocator,
+    trans_read_map: HashMap<TransKey, Vec<CacheMeta>>,
+    trans_write_map: HashMap<TransKey, Vec<CacheMeta>>,
     scheduler: Arc<AsyncScheduler>,
 }
 
 impl TransCacheView {
     pub fn new(scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
-            local_alloc: Mutex::new(LocalCacheBufAllocator::new()),
-            trans_read_map: Mutex::new(HashMap::new()),
-            trans_write_map: Mutex::new(HashMap::new()),
+            local_alloc: LocalCacheBufAllocator::new(),
+            trans_read_map: HashMap::new(),
+            trans_write_map: HashMap::new(),
             scheduler: scheduler.clone(),
         }
     }
 
     #[inline]
-    pub fn start_read_trans(&self, key: &TransKey) {
-        if self.trans_read_map.lock().unwrap().contains_key(key) {
+    pub fn start_read_trans(&mut self, key: &TransKey) {
+        if self.trans_read_map.contains_key(key) {
             return;
         }
-        self.trans_read_map.lock().unwrap().insert(key.clone(), Vec::new());
+        self.trans_read_map.insert(key.clone(), Vec::new());
         self.alloc_read_buf(key);
     }
 
     #[inline]
-    pub fn start_write_trans(&self, key: &TransKey) {
-        if self.trans_write_map.lock().unwrap().contains_key(key) {
+    pub fn start_write_trans(&mut self, key: &TransKey) {
+        if self.trans_write_map.contains_key(key) {
             return;
         }
-        self.trans_write_map.lock().unwrap().insert(key.clone(), Vec::new());
+        self.trans_write_map.insert(key.clone(), Vec::new());
         self.alloc_write_buf(key);
     }
 
     #[inline]
-    pub fn end_read_trans(&self, key: &TransKey) {
-        let mut read_map = self.trans_read_map.lock().unwrap();
+    pub fn end_read_trans(&mut self, key: &TransKey) {
+        let read_map = &mut self.trans_read_map;
         let read_metas = read_map.get_mut(key).unwrap();
         while let Some(meta) = read_metas.pop() {
             match meta.buf {
                 CacheBuf::LocalBuf(buf) => {
-                    self.local_alloc.lock().unwrap().dealloc_buf(buf);
+                    self.local_alloc.dealloc_buf(buf);
                 }
                 CacheBuf::RemoteBuf(buf) => {
                     #[cfg(feature = "doca_deps")]
@@ -175,14 +175,14 @@ impl TransCacheView {
     }
 
     #[inline]
-    pub fn end_write_trans(&self, key: &TransKey) {
-        let mut write_map = self.trans_write_map.lock().unwrap();
+    pub fn end_write_trans(&mut self, key: &TransKey) {
+        let write_map = &mut self.trans_write_map;
 
         let write_metas =write_map.get_mut(key).unwrap();
         while let Some(meta) = write_metas.pop() {
             match meta.buf {
                 CacheBuf::LocalBuf(buf) => {
-                    self.local_alloc.lock().unwrap().dealloc_buf(buf);
+                    self.local_alloc.dealloc_buf(buf);
                 }
                 CacheBuf::RemoteBuf(buf) => {
                     #[cfg(feature = "doca_deps")]
@@ -334,39 +334,37 @@ impl TransCacheView {
 impl TransCacheView {
     // read buf
     #[inline]
-    pub fn get_read_range_num(&self, key: &TransKey) -> usize {
-        self.trans_read_map.lock().unwrap().get(key).unwrap().len()
+    pub fn get_read_range_num(&mut self, key: &TransKey) -> usize {
+        self.trans_read_map.get(key).unwrap().len()
     }
 
     // TODO: prefetch
     #[inline]
     pub async fn get_read_buf(&self, key: &TransKey, idx: usize, cid: u32) -> &[CacheReadSetItem] {
-        let read_map = self.trans_read_map.lock().unwrap();
+        let read_map = &self.trans_read_map;
         let meta = read_map.get(key).unwrap().get(idx).unwrap().clone();
-        drop(read_map);
         self.get_buf_slice(meta, cid).await
     }
 
     #[inline]
     pub fn block_get_read_buf(&self, key: &TransKey, idx: usize, cid: u32) -> &[CacheReadSetItem] {
-        let read_map = self.trans_read_map.lock().unwrap();
+        let read_map = &self.trans_read_map;
         let meta = read_map.get(key).unwrap().get(idx).unwrap().clone();
-        drop(read_map);
         self.block_get_buf_slice(meta, cid)
     }
 
     #[inline]
-    pub fn alloc_read_buf(&self, key: &TransKey) {
-        let new_buf = self.local_alloc.lock().unwrap().alloc_buf().unwrap();
+    pub fn alloc_read_buf(&mut self, key: &TransKey) {
+        let new_buf = self.local_alloc.alloc_buf().unwrap();
 
-        let mut read_map = self.trans_read_map.lock().unwrap();
+        let read_map = &mut self.trans_read_map;
         let read_vec = read_map.get_mut(key).unwrap();
         read_vec.push(CacheMeta::new(CacheBuf::LocalBuf(new_buf), 0));
     }
 
     #[inline]
-    pub fn new_read_cache_writer(&self, key: &TransKey, cid: u32) -> ReadCacheMetaWriter {
-        let mut read_map = self.trans_read_map.lock().unwrap();
+    pub fn new_read_cache_writer(&mut self, key: &TransKey, cid: u32) -> ReadCacheMetaWriter {
+        let read_map = &mut self.trans_read_map;
         let read_vec = read_map.get_mut(key).unwrap();
 
         let idx = read_vec.len() - 1;
@@ -376,15 +374,15 @@ impl TransCacheView {
 
     #[inline]
     fn get_last_read_meta(&self, key: &TransKey) -> CacheMeta {
-        let read_map = self.trans_read_map.lock().unwrap();
+        let read_map = &self.trans_read_map;
         let read_vec = read_map.get(key).unwrap();
         let idx = read_vec.len() - 1;
         read_vec.get(idx).unwrap().clone()
     }
 
     #[inline]
-    async fn sync_read_buf(&self, key: &TransKey, cid: u32, dma_local_buf: &Option<DmaLocalBuf>, dirty_count: usize) {
-        let mut read_map = self.trans_read_map.lock().unwrap();
+    async fn sync_read_buf(&mut self, key: &TransKey, cid: u32, dma_local_buf: &Option<DmaLocalBuf>, dirty_count: usize) {
+        let read_map = &mut self.trans_read_map;
         let read_vec = read_map.get_mut(key).unwrap();
         let idx = read_vec.len() - 1;
         // update count here is proper here ???
@@ -396,8 +394,8 @@ impl TransCacheView {
     }
 
     #[inline]
-    fn block_sync_read_buf(&self, key: &TransKey, cid: u32, dma_local_buf: &Option<DmaLocalBuf>, dirty_count: usize) {
-        let mut read_map = self.trans_read_map.lock().unwrap();
+    fn block_sync_read_buf(&mut self, key: &TransKey, cid: u32, dma_local_buf: &Option<DmaLocalBuf>, dirty_count: usize) {
+        let read_map = &mut self.trans_read_map;
         let read_vec = read_map.get_mut(key).unwrap();
         let idx = read_vec.len() - 1;
         // update count here is proper here ???
@@ -411,13 +409,13 @@ impl TransCacheView {
     // write buf
     #[inline]
     pub fn get_write_range_num(&self, key: &TransKey) -> usize {
-        self.trans_write_map.lock().unwrap().get(key).unwrap().len()
+        self.trans_write_map.get(key).unwrap().len()
     }
 
     // TODO: prefetch
     #[inline]
     pub async fn get_write_buf(&self, key: &TransKey, idx: usize, cid: u32) -> &[CacheWriteSetItem] {
-        let write_map = self.trans_write_map.lock().unwrap();
+        let write_map = &self.trans_write_map;
         let meta = write_map.get(key).unwrap().get(idx).unwrap().clone();
         drop(write_map);
         self.get_buf_slice(meta, cid).await
@@ -425,22 +423,22 @@ impl TransCacheView {
 
     #[inline]
     pub fn block_get_write_buf(&self, key: &TransKey, idx: usize, cid: u32) -> &[CacheWriteSetItem] {
-        let write_map = self.trans_write_map.lock().unwrap();
+        let write_map = &self.trans_write_map;
         let meta = write_map.get(key).unwrap().get(idx).unwrap().clone();
         drop(write_map);
         self.block_get_buf_slice(meta, cid)
     }
 
-    pub fn alloc_write_buf(&self, key: &TransKey) {
-        let new_buf = self.local_alloc.lock().unwrap().alloc_buf().unwrap();
-        let mut write_map = self.trans_write_map.lock().unwrap();
+    pub fn alloc_write_buf(&mut self, key: &TransKey) {
+        let new_buf = self.local_alloc.alloc_buf().unwrap();
+        let write_map = &mut self.trans_write_map;
         let metas = write_map.get_mut(key).unwrap();
         metas.push(CacheMeta::new(CacheBuf::LocalBuf(new_buf), 0));
     }
 
     #[inline]
-    pub fn new_write_cache_writer(&self, key: &TransKey, cid: u32) -> WriteCacheMetaWriter {
-        let mut write_map = self.trans_write_map.lock().unwrap();
+    pub fn new_write_cache_writer(&mut self, key: &TransKey, cid: u32) -> WriteCacheMetaWriter {
+        let write_map = &mut self.trans_write_map;
         let write_vec = write_map.get_mut(key).unwrap();
 
         let idx = write_vec.len() - 1;
@@ -450,15 +448,15 @@ impl TransCacheView {
 
     #[inline]
     fn get_last_write_meta(&self, key: &TransKey) -> CacheMeta {
-        let write_map = self.trans_write_map.lock().unwrap();
+        let write_map = &self.trans_write_map;
         let write_vec = write_map.get(key).unwrap();
         let idx = write_vec.len() - 1;
         write_vec.get(idx).unwrap().clone()
     }
 
     #[inline]
-    async fn sync_write_buf(&self, key: &TransKey, cid: u32, dma_local_buf: &Option<DmaLocalBuf>, dirty_count: usize) {
-        let mut write_map = self.trans_write_map.lock().unwrap();
+    async fn sync_write_buf(&mut self, key: &TransKey, cid: u32, dma_local_buf: &Option<DmaLocalBuf>, dirty_count: usize) {
+        let write_map = &mut self.trans_write_map;
         let write_vec = write_map.get_mut(key).unwrap();
         let idx = write_vec.len() - 1;
         // update count here is proper here ???
@@ -470,8 +468,8 @@ impl TransCacheView {
     }
 
     #[inline]
-    fn block_sync_write_buf(&self, key: &TransKey, cid: u32, dma_local_buf: &Option<DmaLocalBuf>, dirty_count: usize) {
-        let mut write_map = self.trans_write_map.lock().unwrap();
+    fn block_sync_write_buf(&mut self, key: &TransKey, cid: u32, dma_local_buf: &Option<DmaLocalBuf>, dirty_count: usize) {
+        let write_map = &mut self.trans_write_map;
         let write_vec = write_map.get_mut(key).unwrap();
         let idx = write_vec.len() - 1;
         // update count here is proper here ???
@@ -529,7 +527,7 @@ impl<'worker> ReadCacheMetaWriter {
         self.dirty_count += 1;
     }
 
-    pub async fn append_item(&mut self, view: &TransCacheView, item: CacheReadSetItem) {
+    pub async fn append_item(&mut self, view: &mut TransCacheView, item: CacheReadSetItem) {
         if self.meta.count + self.dirty_count >= max_read_item_count_in_buf() {
             view.sync_read_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count).await;
             view.alloc_read_buf(&self.trans_key);
@@ -546,11 +544,11 @@ impl<'worker> ReadCacheMetaWriter {
         self.set_item(item);
     }
 
-    pub async fn sync_buf(&self, view: &TransCacheView) {
+    pub async fn sync_buf(&self, view: &mut TransCacheView) {
         view.sync_read_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count).await;
     }
 
-    pub fn block_append_item(&mut self, view: &TransCacheView, item: CacheReadSetItem) {
+    pub fn block_append_item(&mut self, view: &mut TransCacheView, item: CacheReadSetItem) {
         if self.meta.count + self.dirty_count >= max_read_item_count_in_buf() {
             view.block_sync_read_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count);
             view.alloc_read_buf(&self.trans_key);
@@ -567,7 +565,7 @@ impl<'worker> ReadCacheMetaWriter {
         self.set_item(item);
     }
 
-    pub fn block_sync_buf(&self, view: &TransCacheView) {
+    pub fn block_sync_buf(&self, view: &mut TransCacheView) {
         view.block_sync_read_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count);
     }
 }
@@ -618,7 +616,7 @@ impl<'worker> WriteCacheMetaWriter {
         self.dirty_count += 1;
     }
 
-    pub async fn append_item(&mut self, view: &TransCacheView, item: CacheWriteSetItem) {
+    pub async fn append_item(&mut self, view: &mut TransCacheView, item: CacheWriteSetItem) {
         if self.meta.count + self.dirty_count >= max_write_item_count_in_buf() {
             view.sync_write_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count).await;
             view.alloc_write_buf(&self.trans_key);
@@ -636,11 +634,11 @@ impl<'worker> WriteCacheMetaWriter {
         self.set_item(item);
     }
 
-    pub async fn sync_buf(&self, view: &TransCacheView) {
+    pub async fn sync_buf(&self, view: &mut TransCacheView) {
         view.sync_write_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count).await;
     }
 
-    pub fn block_append_item(&mut self, view: &TransCacheView, item: CacheWriteSetItem) {
+    pub fn block_append_item(&mut self, view: &mut TransCacheView, item: CacheWriteSetItem) {
         if self.meta.count + self.dirty_count >= max_write_item_count_in_buf() {
             view.block_sync_write_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count);
             view.alloc_write_buf(&self.trans_key);
@@ -658,7 +656,7 @@ impl<'worker> WriteCacheMetaWriter {
         self.set_item(item);
     }
 
-    pub fn block_sync_buf(&self, view: &TransCacheView) {
+    pub fn block_sync_buf(&self, view: &mut TransCacheView) {
         view.block_sync_write_buf(&self.trans_key, self.cid, &self.dma_local_buf, self.dirty_count);
     }
 }
