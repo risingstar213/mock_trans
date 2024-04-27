@@ -520,7 +520,14 @@ impl AsyncScheduler {
     }
 
     pub async fn yield_until_ready(&self, cid: u32) {
+        let start = std::time::SystemTime::now();
         loop {
+            let now = std::time::SystemTime::now();
+            let duration = now.duration_since(start).unwrap();
+            if duration.as_millis() > 10000 {
+                panic!("wait too long");
+            }
+            
             let pendings = unsafe { self.pendings.get().as_ref().unwrap() };
             let reply_counts = unsafe { &self.reply_metas.get().as_ref().unwrap().reply_counts };
             if pendings[cid as usize] == 0 && reply_counts[cid as usize] == 0 {

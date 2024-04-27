@@ -115,12 +115,12 @@ impl CommChannel {
             panic!("Failed to set max_msg_size property");
         }
 
-        ret = unsafe { ffi::doca_comm_channel_ep_set_send_queue_size(ep, 20) };
+        ret = unsafe { ffi::doca_comm_channel_ep_set_send_queue_size(ep, 64) };
         if ret != DOCAError::DOCA_SUCCESS {
             panic!("Failed to set snd_queue_size property");
         }
 
-        ret = unsafe { ffi::doca_comm_channel_ep_set_recv_queue_size(ep, 20) };
+        ret = unsafe { ffi::doca_comm_channel_ep_set_recv_queue_size(ep, 64) };
         if ret != DOCAError::DOCA_SUCCESS {
             panic!("Failed to set rcv_queue_size property");
         }

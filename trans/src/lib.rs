@@ -28,7 +28,7 @@ const NPAGES: u64 = 128;
 const MAX_PACKET_SIZE: usize = 256;
 
 // send recv info
-const MAX_SEND_SIZE: usize = 32;
+const MAX_SEND_SIZE: usize = 128;
 const MAX_RECV_SIZE: usize = 64;
 const MAX_DOORBELL_SEND_SIZE: usize = 8;
 // const MAX_IDLE_RECV_NUM: usize = 1;
@@ -43,7 +43,7 @@ const MAX_REQ_SIZE: usize = 256;
 const MAX_RESP_SIZE: usize = 512;
 
 /////////////////// MemStore //////////////////////////
-const ROBINHOOD_SIZE:    usize = 2048;
+const ROBINHOOD_SIZE:    usize = 24576;
 const ROBINHOOD_DIB_MAX: usize = 8;
 
 
