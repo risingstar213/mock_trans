@@ -333,9 +333,9 @@ impl SmallBankWorker {
 
 
         if txn.is_commited() {
-            println!("check: commit {}", end_time.duration_since(start_time).unwrap().as_millis());
+            println!("check: commit {}", end_time.duration_since(start_time).unwrap().as_micros());
         } else {
-            println!("check: abort {}", end_time.duration_since(start_time).unwrap().as_millis());
+            println!("check: abort {}", end_time.duration_since(start_time).unwrap().as_micros());
         }
     }
 }

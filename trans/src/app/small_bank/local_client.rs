@@ -80,13 +80,13 @@ impl SmallBankClient {
         let start_time = SystemTime::now();
         let mut rand_gen = FastRandom::new(rand_seed);
         loop {
-            self.send_workload_test(&mut rand_gen).await;
+            self.send_workload(&mut rand_gen).await;
             count += 1;
 
             if count % 10000 == 0 {
                 let now_time = SystemTime::now();
                 let duration = now_time.duration_since(start_time).unwrap();
-                // println!("{}, {}", count, duration.as_millis());
+                println!("{}, {}", count, duration.as_millis());
             }
             // sleep(Duration::from_millis(1)).await;
         }

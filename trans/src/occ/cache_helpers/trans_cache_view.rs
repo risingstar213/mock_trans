@@ -14,7 +14,7 @@ use crate::doca_dma::{ DmaLocalBuf, DmaRemoteBuf };
 use super::{ CacheReadSetItem, CacheWriteSetItem };
 
 // simplified trans id
-#[derive(PartialEq, Eq, Hash, Clone)]
+#[derive(PartialEq, Eq, Hash, Clone, Debug)]
 pub struct TransKey {
     key: u64,
 }
@@ -564,6 +564,7 @@ impl<'worker> ReadCacheMetaWriter {
 
             self.dirty_count = 0;
         }
+        self.set_item(item);
     }
 
     pub fn block_sync_buf(&self, view: &TransCacheView) {

@@ -54,7 +54,7 @@ const MAX_DMA_BUF_REMOTE: usize = 128;
 const MAX_DMA_BUF_PER_ROUTINE: usize = 16;
 
 /////////////////// DOCA CONN /////////////////////////
-const MAX_CONN_INFO_BUFS: usize = 16;
+const MAX_CONN_INFO_BUFS: usize = 20;
 const MAX_CONN_MSG_SIZE: usize = 256;
 
 /////////////////// CACHE /////////////////////////////

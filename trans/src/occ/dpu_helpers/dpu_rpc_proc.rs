@@ -291,13 +291,17 @@ impl DpuRpcProc {
 
         let req_header = req_wrapper.get_header();
 
-        for _ in 0..req_header.num {
+        for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<ReadReqItem>();
 
             let meta = self.memdb.local_get_meta(
                 req_item.table_id, 
                 req_item.key, 
             ).unwrap();
+
+            if i as usize != req_item.read_idx {
+                println!("read_idx msimatch {}, {}", i, req_item.read_idx);
+            }
 
             unsafe {
                 comm_req.append_item(req_item.clone());
@@ -350,7 +354,7 @@ impl DpuRpcProc {
         let mut lock_success = true;
         let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
 
-        for _ in 0..req_header.num {
+        for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
 
             let meta = self.memdb.local_lock(
@@ -358,6 +362,10 @@ impl DpuRpcProc {
                 req_item.key, 
                 lock_content.to_content(),
             ).unwrap();
+
+            if i as usize != req_item.update_idx {
+                println!("read_idx msimatch {}, {}", i, req_item.update_idx);
+            }
 
             if meta.lock != lock_content.to_content() {
                 lock_success = false;

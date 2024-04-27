@@ -291,13 +291,13 @@ impl<const MAX_ITEM_SIZE: usize> OccHybrid<MAX_ITEM_SIZE>
     }
 
     #[inline]
-    fn process_read_resp(&mut self, wrapper: &mut BatchRpcRespWrapper, num: u32) {
+    fn process_read_resp(&mut self, resp_idx: usize, wrapper: &mut BatchRpcRespWrapper, num: u32) {
         for _ in 0..num {
             let item = wrapper.get_item::<ReadCacheRespItem>();
             let raw_data = wrapper.get_extra_data_const_ptr::<ReadCacheRespItem>();
 
             if item.read_idx >= self.readset.get_len() {
-                println!("read length overflow???, cid:{}, num:{}", self.cid, num);
+                println!("read length overflow???, resp_idx: {} cid:{}, num:{}", resp_idx, self.cid, num);
             }
 
             let bucket = self.readset.bucket(item.read_idx);
@@ -309,7 +309,7 @@ impl<const MAX_ITEM_SIZE: usize> OccHybrid<MAX_ITEM_SIZE>
     }
 
     #[inline]
-    fn process_fetch_write_resp(&mut self, wrapper: &mut BatchRpcRespWrapper, num: u32) {
+    fn process_fetch_write_resp(&mut self, resp_idx: usize, wrapper: &mut BatchRpcRespWrapper, num: u32) {
         for _ in 0..num {
             let item = wrapper.get_item::<FetchWriteCacheRespItem>();
             let raw_data = wrapper.get_extra_data_const_ptr::<FetchWriteCacheRespItem>();
@@ -320,7 +320,7 @@ impl<const MAX_ITEM_SIZE: usize> OccHybrid<MAX_ITEM_SIZE>
             }
 
             if item.update_idx >= self.updateset.get_len() {
-                println!("update length overflow???, cid:{}, num:{}", self.cid, num);
+                println!("update length overflow???, resp_idx: {}, cid:{}, num:{}", resp_idx, self.cid, num);
             }
 
             let bucket = self.updateset.bucket(item.update_idx);
@@ -333,13 +333,13 @@ impl<const MAX_ITEM_SIZE: usize> OccHybrid<MAX_ITEM_SIZE>
     fn process_batch_rpc_resp(&mut self) {
         let (mut resp_buf, resp_num) = self.batch_rpc.get_resp_buf_num().unwrap();
 
-        for _ in 0..resp_num {
+        for i in 0..resp_num {
             let mut wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE);
             let header = wrapper.get_header();
             if header.write {
-                self.process_fetch_write_resp(&mut wrapper, header.num);
+                self.process_fetch_write_resp(i, &mut wrapper, header.num);
             } else {
-                self.process_read_resp(&mut wrapper, header.num);
+                self.process_read_resp(i, &mut wrapper, header.num);
             }
 
             resp_buf = unsafe { resp_buf.byte_add(wrapper.get_off()) };

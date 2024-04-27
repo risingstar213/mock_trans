@@ -47,6 +47,9 @@ impl HostRpcProc {
             let req_item = unsafe { buf.get_item::<ReadReqItem>(i) };
             let data_len = self.valuedb.get_item_length(req_item.table_id);
 
+            if i as usize != req_item.read_idx {
+                println!("read_idx msimatch {}, {}", i, req_item.read_idx);
+            }
             self.valuedb.local_get_value(
                 req_item.table_id,
                 req_item.key,
@@ -92,6 +95,10 @@ impl HostRpcProc {
         for i in 0..count {
             let req_item = unsafe { buf.get_item::<FetchWriteReqItem>(i) };
             let data_len = self.valuedb.get_item_length(req_item.table_id);
+
+            if i as usize != req_item.update_idx {
+                println!("read_idx msimatch {}, {}", i, req_item.update_idx);
+            }
 
             self.valuedb.local_get_value(
                 req_item.table_id, 

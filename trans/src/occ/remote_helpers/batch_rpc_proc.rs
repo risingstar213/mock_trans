@@ -385,7 +385,7 @@ impl BatchRpcProc {
 
         let req_header = req_wrapper.get_header();
 
-        for _ in 0..req_header.num {
+        for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<ReadReqItem>();
             let data_len = self.memdb.get_item_length(req_item.table_id);
 
@@ -395,6 +395,10 @@ impl BatchRpcProc {
                 resp_wrapper.get_extra_data_raw_ptr::<ReadCacheRespItem>(), 
                 data_len as u32,
             ).unwrap();
+
+            if i as usize != req_item.read_idx {
+                println!("read_idx msimatch {}, {}", i, req_item.read_idx);
+            }
 
             resp_wrapper.set_item(ReadCacheRespItem{
                 read_idx: req_item.read_idx,
@@ -412,6 +416,8 @@ impl BatchRpcProc {
         }
 
         read_cache_writer.block_sync_buf(&self.trans_view);
+
+        // println!("read key: {:?}, count: {}", trans_key, req_header.num);
 
         resp_wrapper.set_header(BatchRpcRespHeader {
             write: false,
@@ -448,7 +454,7 @@ impl BatchRpcProc {
 
         let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
 
-        for _ in 0..req_header.num {
+        for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
             let mut data_len = self.memdb.get_item_length(req_item.table_id);
 
@@ -477,6 +483,10 @@ impl BatchRpcProc {
                     key:      req_item.key,
                     insert:   false,
                 });
+            }
+
+            if i as usize != req_item.update_idx {
+                println!("read_idx msimatch {}, {}", i, req_item.update_idx);
             }
 
             req_wrapper.shift_to_next_item::<FetchWriteReqItem>(0);
@@ -592,6 +602,8 @@ impl BatchRpcProc {
                     break;
                 }
             }
+
+            // println!("validate key: {:?}, count: {}, success: {}", trans_key, read_buf.len(), success);
         }
 
         self.trans_view.end_read_trans(&trans_key);
