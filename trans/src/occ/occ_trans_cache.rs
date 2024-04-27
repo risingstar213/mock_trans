@@ -308,6 +308,7 @@ impl<const MAX_ITEM_SIZE: usize> OccTransCache<MAX_ITEM_SIZE>
 
             if item.update_idx >= self.updateset.get_len() {
                 error!("update length overflow???, cid:{}, num:{}", self.cid, num);
+                panic!();
             }
 
             let bucket = self.updateset.bucket(item.update_idx);
@@ -326,6 +327,7 @@ impl<const MAX_ITEM_SIZE: usize> OccTransCache<MAX_ITEM_SIZE>
             
             if header.cid != self.cid {
                 error!("holy shit! {}th got strange resp ! me:{}, get:{}, write: {}, num: {}", i, self.cid, header.cid, header.write, header.num);
+                panic!();
             }
             if header.write {
                 self.process_fetch_write_resp(&mut wrapper, header.num);

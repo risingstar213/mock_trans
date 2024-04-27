@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use log::debug;
 
 use crate::doca_comm_chan::comm_buf::DocaCommBuf;
 use crate::doca_comm_chan::doca_comm_info_type;
@@ -294,6 +295,8 @@ impl DpuRpcProc {
         for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<ReadReqItem>();
 
+            debug!("remote read pid: {}, cid: {}, tid: {}, read_idx: {}", meta.peer_id, meta.rpc_cid, self.tid, req_item.read_idx);
+
             let meta = self.memdb.local_get_meta(
                 req_item.table_id, 
                 req_item.key, 
@@ -352,6 +355,8 @@ impl DpuRpcProc {
 
         for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
+
+            debug!("remote fetchwrite pid: {}, cid: {}, tid: {}, update_idx: {}", meta.peer_id, meta.rpc_cid, self.tid, req_item.update_idx);
 
             let meta = self.memdb.local_lock(
                 req_item.table_id, 

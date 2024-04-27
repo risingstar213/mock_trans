@@ -9,6 +9,7 @@ edition = "2021"
 [features]
 default = ["doca_deps"]
 doca_deps = ["serde_derive", "doca", "doca-sys"]
+debug = []
 
 [dependencies]
 libc         = "0.2"

@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use log::debug;
 
 use crate::doca_comm_chan::comm_buf::DocaCommBuf;
 use crate::doca_comm_chan::doca_comm_info_type;
@@ -42,7 +43,7 @@ impl HostRpcProc {
         let count = info_payload as usize / std::mem::size_of::<ReadReqItem>();
         let resp_buf = self.scheduler.get_reply_buf(0);
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
-    
+
         for i in 0..count {
             let req_item = unsafe { buf.get_item::<ReadReqItem>(i) };
             let data_len = self.valuedb.get_item_length(req_item.table_id);
@@ -53,7 +54,7 @@ impl HostRpcProc {
                 resp_wrapper.get_extra_data_raw_ptr::<ReadCacheRespItem>(),
                 data_len as u32,
             );
-
+            debug!("remote read pid: {}, cid: {}, tid: {}, read_idx: {}", info_pid, info_cid, self.tid, req_item.read_idx);
             resp_wrapper.set_item(ReadCacheRespItem{
                 read_idx: req_item.read_idx,
                 length:   data_len,
@@ -101,6 +102,8 @@ impl HostRpcProc {
                 resp_wrapper.get_extra_data_raw_ptr::<FetchWriteCacheRespItem>(), 
                 data_len as u32,
             );
+
+            debug!("remote fetchwrite pid: {}, cid: {}, tid: {}, update_idx: {}", info_pid, info_cid, self.tid, req_item.update_idx);
 
             resp_wrapper.set_item(FetchWriteCacheRespItem{
                 update_idx: req_item.update_idx,
