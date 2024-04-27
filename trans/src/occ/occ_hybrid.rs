@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use log::{ error, debug };
 
 use crate::memstore::memdb::MemDB;
 use crate::memstore::MemStoreValue;
@@ -320,7 +321,7 @@ impl<const MAX_ITEM_SIZE: usize> OccHybrid<MAX_ITEM_SIZE>
             }
 
             if item.update_idx >= self.updateset.get_len() {
-                println!("update length overflow???, resp_idx: {}, cid:{}, num:{}", resp_idx, self.cid, num);
+                error!("update length overflow???, resp_idx: {}, cid:{}, num:{}", resp_idx, self.cid, num);
             }
 
             let bucket = self.updateset.bucket(item.update_idx);
@@ -336,13 +337,16 @@ impl<const MAX_ITEM_SIZE: usize> OccHybrid<MAX_ITEM_SIZE>
         for i in 0..resp_num {
             let mut wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE);
             let header = wrapper.get_header();
+            if header.cid != self.cid {
+                error!("holy shit! {}th got strange resp ! me:{}, get:{}, write: {}, num: {}", i, self.cid, header.cid, header.write, header.num);
+            }
             if header.write {
                 self.process_fetch_write_resp(i, &mut wrapper, header.num);
             } else {
                 self.process_read_resp(i, &mut wrapper, header.num);
             }
 
-            resp_buf = unsafe { resp_buf.byte_add(wrapper.get_off()) };
+            resp_buf = unsafe { resp_buf.byte_add(crate::MAX_PACKET_SIZE) };
         }
     }
     
@@ -355,7 +359,7 @@ impl<const MAX_ITEM_SIZE: usize> OccHybrid<MAX_ITEM_SIZE>
                 break;
             }
 
-            resp_buf = unsafe { resp_buf.byte_add(std::mem::size_of::<BatchRpcReduceResp>()) };
+            resp_buf = unsafe { resp_buf.byte_add(crate::MAX_PACKET_SIZE) };
         }
     }
 }

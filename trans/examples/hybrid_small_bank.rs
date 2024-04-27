@@ -3,6 +3,9 @@
 use std::sync::{ Arc, Mutex };
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::mpsc;
+use std::env;
+
+use trans::common::logs::init_log;
 
 use trans::app::small_bank::local_client::SmallBankClient;
 use trans::app::small_bank::SmallBankClientReq;
@@ -56,6 +59,8 @@ async fn connect_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize, client
 
 fn main()
 {
+    let log_path = env::current_dir().unwrap().join("test.log");
+    init_log(log_path.as_path());
     let memdb = SmallBankLoader::new_memdb(1);
     let mut sb_client = SmallBankClient::new();
 

@@ -223,7 +223,7 @@ impl RdmaRecvCallback for AsyncScheduler {
                 }
 
                 if let Some(mut_buf) = reply_metas.reply_bufs.get_mut::<usize>(index) {
-                    *mut_buf = unsafe { mut_buf.add((meta.rpc_payload) as usize) };
+                    *mut_buf = unsafe { mut_buf.add(crate::MAX_PACKET_SIZE) };
                 }
 
                 if let Some(mut_count) = reply_metas.reply_counts.get_mut::<usize>(index) {

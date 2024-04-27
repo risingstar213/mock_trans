@@ -100,7 +100,6 @@ impl BatchRpcCtrl
 
             self.req_msgs[i].wrapper.set_header(BatchRpcReqHeader{
                 peer_id: peer_id,
-                cid:     self.cid,
                 num:     req_num,
             });
 

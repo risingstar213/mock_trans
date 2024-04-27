@@ -75,6 +75,7 @@ impl BatchRpcProc {
 
         resp_wrapper.set_header(BatchRpcRespHeader {
             write: false,
+            cid: meta.rpc_cid,
             num: req_header.num,
         });
 
@@ -138,6 +139,7 @@ impl BatchRpcProc {
 
         resp_wrapper.set_header(BatchRpcRespHeader {
             write: true,
+            cid: meta.rpc_cid,
             num: req_header.num,
         });
 
@@ -396,10 +398,6 @@ impl BatchRpcProc {
                 data_len as u32,
             ).unwrap();
 
-            if i as usize != req_item.read_idx {
-                println!("read_idx msimatch {}, {}", i, req_item.read_idx);
-            }
-
             resp_wrapper.set_item(ReadCacheRespItem{
                 read_idx: req_item.read_idx,
                 length:   data_len,
@@ -421,6 +419,7 @@ impl BatchRpcProc {
 
         resp_wrapper.set_header(BatchRpcRespHeader {
             write: false,
+            cid: meta.rpc_cid,
             num: req_header.num,
         });
 
@@ -485,10 +484,6 @@ impl BatchRpcProc {
                 });
             }
 
-            if i as usize != req_item.update_idx {
-                println!("read_idx msimatch {}, {}", i, req_item.update_idx);
-            }
-
             req_wrapper.shift_to_next_item::<FetchWriteReqItem>(0);
             resp_wrapper.shift_to_next_item::<FetchWriteCacheRespItem>(data_len);
         }
@@ -497,6 +492,7 @@ impl BatchRpcProc {
 
         resp_wrapper.set_header(BatchRpcRespHeader {
             write: true,
+            cid: meta.rpc_cid,
             num: req_header.num,
         });
 

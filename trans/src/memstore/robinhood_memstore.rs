@@ -131,8 +131,6 @@ where
             return ret;
         }
 
-        println!("insert key: {}", key);
-
         self.table.wlock();
 
         match self.table.get(key) {

@@ -299,10 +299,6 @@ impl DpuRpcProc {
                 req_item.key, 
             ).unwrap();
 
-            if i as usize != req_item.read_idx {
-                println!("read_idx msimatch {}, {}", i, req_item.read_idx);
-            }
-
             unsafe {
                 comm_req.append_item(req_item.clone());
             }
@@ -363,10 +359,6 @@ impl DpuRpcProc {
                 lock_content.to_content(),
             ).unwrap();
 
-            if i as usize != req_item.update_idx {
-                println!("read_idx msimatch {}, {}", i, req_item.update_idx);
-            }
-
             if meta.lock != lock_content.to_content() {
                 lock_success = false;
                 break;
@@ -422,6 +414,7 @@ impl DpuRpcProc {
 
         resp_wrapper.set_header(BatchRpcRespHeader {
             write: true,
+            cid: meta.rpc_cid,
             num: req_header.num,
         });
 

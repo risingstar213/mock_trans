@@ -11,7 +11,6 @@ use crate::framework::rpc::*;
 #[derive(Clone)]
 pub struct BatchRpcReqHeader {
     pub(crate) peer_id: u64,
-    pub(crate) cid:     u32,
     pub(crate) num:     u32,
 }
 
@@ -19,6 +18,7 @@ pub struct BatchRpcReqHeader {
 #[derive(Clone)]
 pub struct BatchRpcRespHeader {
     pub(crate) write: bool,
+    pub(crate) cid:   u32,
     pub(crate) num:   u32,
 }
 

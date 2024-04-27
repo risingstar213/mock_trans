@@ -1,5 +1,8 @@
 #![feature(get_mut_unchecked)]
 use std::sync::Arc;
+use std::env;
+
+use trans::common::logs::init_log;
 
 use trans::rdma::control::RdmaControl;
 
@@ -159,6 +162,8 @@ impl AsyncWorker for OccCtrlWorker {
 
 #[tokio::main]
 async fn main() {
+    let log_path = env::current_dir().unwrap().join("test.log");
+    init_log(log_path.as_path());
     // memdb
     let mut memdb = Arc::new(MemDB::new());
     let memstore = RobinhoodMemStore::<Account>::new();

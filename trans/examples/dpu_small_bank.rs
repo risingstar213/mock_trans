@@ -1,5 +1,9 @@
 #![feature(get_mut_unchecked)]
 
+use std::env;
+
+use trans::common::logs::init_log;
+
 #[cfg(feature = "doca_deps")]
 mod test_dpu {
 
@@ -86,6 +90,8 @@ pub fn test() {
 }
 
 fn main() {
+    let log_path = env::current_dir().unwrap().join("test.log");
+    init_log(log_path.as_path());
     #[cfg(feature = "doca_deps")]
     test_dpu::test();
 }
