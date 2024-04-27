@@ -47,23 +47,24 @@ impl DocaCommHandler for OccProcWorker {
             info_id: u32,
             info_payload: u32,
             info_pid: u32,
+            info_tid: u32,
             info_cid: u32,
         ) {
         match info_id {
             doca_comm_info_id::LOCAL_READ_INFO => {
-                self.proc.local_read_info_handler(buf, info_payload, info_pid, info_cid);
+                self.proc.local_read_info_handler(buf, info_payload, info_pid, info_tid, info_cid);
             }
             doca_comm_info_id::LOCAL_LOCK_INFO => {
-                self.proc.local_lock_info_handler(buf, info_payload, info_pid, info_cid);
+                self.proc.local_lock_info_handler(buf, info_payload, info_pid, info_tid, info_cid);
             }
             doca_comm_info_id::LOCAL_VALIDATE_INFO => {
-                self.proc.local_validate_info_handler(buf, info_payload, info_pid, info_cid);
+                self.proc.local_validate_info_handler(buf, info_payload, info_pid, info_tid, info_cid);
             }
             doca_comm_info_id::LOCAL_RELEASE_INFO => {
-                self.proc.local_release_info_handler(buf, info_payload, info_pid, info_cid);
+                self.proc.local_release_info_handler(buf, info_payload, info_pid, info_tid, info_cid);
             }
             doca_comm_info_id::LOCAL_ABORT_INFO => {
-                self.proc.local_abort_info_handler(buf, info_payload, info_pid, info_cid);
+                self.proc.local_abort_info_handler(buf, info_payload, info_pid, info_tid, info_cid);
             }
             _ => { panic!("unsupported!"); }
         }

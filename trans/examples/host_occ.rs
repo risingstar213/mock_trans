@@ -182,14 +182,15 @@ impl DocaCommHandler for OccCtrlWorker {
             info_id: u32,
             info_payload: u32,
             info_pid: u32,
+            info_tid: u32,
             info_cid: u32,
         ) {
         match info_id {
             doca_comm_info_id::REMOTE_READ_INFO => {
-                self.proc.remote_read_info_handler(buf, info_payload, info_pid, info_cid);
+                self.proc.remote_read_info_handler(buf, info_payload, info_pid, info_tid, info_cid);
             }
             doca_comm_info_id::REMOTE_FETCHWRITE_INFO => {
-                self.proc.remote_fetch_write_info_handler(buf, info_payload, info_pid, info_cid);
+                self.proc.remote_fetch_write_info_handler(buf, info_payload, info_pid, info_tid, info_cid);
             }
             _ => { panic!("unsupported!"); }
         }

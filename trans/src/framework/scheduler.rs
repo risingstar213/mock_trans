@@ -477,6 +477,7 @@ impl AsyncScheduler {
                         header.info_id,
                         header.info_payload,
                         header.info_pid,
+                        header.info_tid,
                         header.info_cid,
                     );
                 }
@@ -486,6 +487,9 @@ impl AsyncScheduler {
                     let write_ptr = unsafe { replys[header.info_cid as usize].get_mut_ptr() };
                     unsafe {
                         std::ptr::copy_nonoverlapping(recv_buf.get_const_ptr(), write_ptr, header.info_payload as usize);
+                    }
+                    if replys[header.info_cid as usize].get_pending_count() == 0 {
+                        println!("what the fuck? {:?}", header);
                     }
                     replys[header.info_cid as usize].append_reply(header.info_payload as usize);
                 }
@@ -497,15 +501,18 @@ impl AsyncScheduler {
     }
 
     pub async fn yield_until_comm_ready(&self, cid: u32) -> DocaCommReplyWrapper {
-        let start = std::time::SystemTime::now();
+        let mut count = 0;
+        let mut start = std::time::SystemTime::now();
         loop {
 
             let comm_replys = unsafe { self.comm_replys.get().as_mut().unwrap() };
             if comm_replys[cid as usize].get_pending_count() > 0 {
                 let now = std::time::SystemTime::now();
                 let duration = now.duration_since(start).unwrap();
-                if duration.as_millis() > 10000 {
-                    println!("wait dpu comm too long {} ", cid);
+                if duration.as_millis() > 5000 {
+                    println!("wait dpu comm too long {}, count:{} ", cid, count);
+                    start = now;
+                    count += 1;
                 }
                 self.yield_now(cid).await;
             } else {
@@ -527,7 +534,7 @@ impl AsyncScheduler {
     }
 
     pub async fn yield_until_ready(&self, cid: u32) {
-        let start = std::time::SystemTime::now();
+        let mut start = std::time::SystemTime::now();
         loop {
             
             let pendings = unsafe { self.pendings.get().as_ref().unwrap() };
@@ -538,7 +545,8 @@ impl AsyncScheduler {
             let now = std::time::SystemTime::now();
             let duration = now.duration_since(start).unwrap();
             if duration.as_millis() > 10000 {
-                panic!("wait too long");
+                println!("wait too long");
+                start = now;
             }
             self.yield_now(cid).await;
         }

@@ -9,6 +9,7 @@ use super::*;
 
 pub struct CommChanCtrl {
     pid:       u32,
+    tid:       u32,
     cid:       u32,
     scheduler: Arc<AsyncScheduler>,
     msg_map:   HashMap<u32, DocaCommBuf>,
@@ -18,9 +19,10 @@ pub struct CommChanCtrl {
 }
 
 impl CommChanCtrl {
-    pub fn new(scheduler: &Arc<AsyncScheduler>, pid: u32, cid: u32) -> Self {
+    pub fn new(scheduler: &Arc<AsyncScheduler>, pid: u32, tid: u32, cid: u32) -> Self {
         Self {
             pid:       pid,
+            tid:       tid,
             cid:       cid,
             scheduler: scheduler.clone(),
             msg_map:  HashMap::new(),
@@ -52,6 +54,7 @@ impl CommChanCtrl {
                 info_id:   info_id,
                 info_payload: payload,
                 info_pid:  self.pid,
+                info_tid:  self.tid,
                 info_cid:  self.cid,
             });
 

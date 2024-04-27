@@ -114,7 +114,7 @@ impl DocaCommReply {
 
     pub fn reset(&mut self, pending_count: usize) {
         self.payload = 0;
-        self.pending_count += pending_count;
+        self.pending_count = pending_count;
     }
 
     pub fn append_reply(&mut self, payload: usize) {

@@ -17,19 +17,21 @@ bitfields!(
     pub DocaCommHeaderMeta: u32 {
         pub info_type:    2,
         pub info_id:      5,
-        pub info_payload:  13,
+        pub info_payload:  10,
         pub info_pid:     5,
+        pub info_tid:     3,
         pub info_cid:     7
     }
 );
 
 impl DocaCommHeaderMeta {
-    pub fn new(info_type: u32, info_id: u32, info_payload: u32, info_pid: u32, info_cid: u32) -> Self {
+    pub fn new(info_type: u32, info_id: u32, info_payload: u32, info_pid: u32, info_tid: u32, info_cid: u32) -> Self {
         Self {
             info_type: info_type,
             info_id:   info_id,
             info_payload: info_payload,
             info_pid:  info_pid,
+            info_tid:  info_tid,
             info_cid:  info_cid
         }
     }

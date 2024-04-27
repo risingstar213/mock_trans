@@ -40,7 +40,7 @@ impl<const MAX_ITEM_SIZE: usize> OccHost<MAX_ITEM_SIZE>
             cid:       cid,
             valuedb:   valuedb.clone(),
             batch_rpc: BatchRpcCtrl::new(scheduler, cid),
-            comm_chan: CommChanCtrl::new(scheduler, part_id as _, cid),
+            comm_chan: CommChanCtrl::new(scheduler, part_id as _, tid, cid),
             readset:   RwSet::new(),
             updateset: RwSet::new(),
             writeset:  RwSet::new(),

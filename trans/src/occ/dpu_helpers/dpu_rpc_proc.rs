@@ -49,8 +49,13 @@ impl DpuRpcProc {
         buf: &DocaCommBuf,
         info_payload: u32,
         info_pid: u32,
+        info_tid: u32,
         info_cid: u32,
     ) {
+        if info_tid != self.tid {
+            panic!("what the fuck {} , {} ", info_tid, self.tid);
+        }
+        
         let count = info_payload as usize / std::mem::size_of::<LocalReadInfoItem>();
 
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
@@ -83,6 +88,7 @@ impl DpuRpcProc {
             info_id:   doca_comm_info_id::LOCAL_READ_INFO,
             info_payload: std::mem::size_of::<DocaCommReply>() as u32,
             info_pid: info_pid,
+            info_tid: self.tid,
             info_cid: info_cid,
         });
 
@@ -95,8 +101,13 @@ impl DpuRpcProc {
         buf: &DocaCommBuf,
         info_payload: u32,
         info_pid: u32,
+        info_tid: u32,
         info_cid: u32,
     ) {
+        if info_tid != self.tid {
+            panic!("what the fuck {} , {} ", info_tid, self.tid);
+        }
+        
         let count = info_payload as usize / std::mem::size_of::<LocalLockInfoItem>();
     
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
@@ -139,6 +150,7 @@ impl DpuRpcProc {
             info_id:   doca_comm_info_id::LOCAL_LOCK_INFO,
             info_payload: std::mem::size_of::<DocaCommReply>() as u32,
             info_pid: info_pid,
+            info_tid: self.tid,
             info_cid: info_cid,
         });
 
@@ -151,9 +163,14 @@ impl DpuRpcProc {
         buf: &DocaCommBuf,
         info_payload: u32,
         info_pid: u32,
+        info_tid: u32,
         info_cid: u32,
     ) {
 
+        if info_tid != self.tid {
+            panic!("what the fuck {} , {} ", info_tid, self.tid);
+        }
+        
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
         let buf_count = trans_view.get_read_range_num(&trans_key);
@@ -187,6 +204,7 @@ impl DpuRpcProc {
             info_id:   doca_comm_info_id::LOCAL_VALIDATE_INFO,
             info_payload: std::mem::size_of::<DocaCommReply>() as u32,
             info_pid: info_pid,
+            info_tid: self.tid,
             info_cid: info_cid,
         });
 
@@ -199,8 +217,13 @@ impl DpuRpcProc {
         buf: &DocaCommBuf,
         info_payload: u32,
         info_pid: u32,
+        info_tid: u32,
         info_cid: u32,
     ) {
+        if info_tid != self.tid {
+            panic!("what the fuck {} , {} ", info_tid, self.tid);
+        }
+        
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
         let buf_count = trans_view.get_write_range_num(&trans_key);
@@ -226,6 +249,7 @@ impl DpuRpcProc {
             info_id:   doca_comm_info_id::LOCAL_RELEASE_INFO,
             info_payload: 0,
             info_pid: info_pid,
+            info_tid: self.tid,
             info_cid: info_cid,
         });
 
@@ -238,8 +262,13 @@ impl DpuRpcProc {
         buf: &DocaCommBuf,
         info_payload: u32,
         info_pid: u32,
+        info_tid: u32,
         info_cid: u32,
     ) {
+        if info_tid != self.tid {
+            panic!("what the fuck {} , {} ", info_tid, self.tid);
+        }
+        
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
         let buf_count = trans_view.get_write_range_num(&trans_key);
@@ -274,6 +303,7 @@ impl DpuRpcProc {
             info_id:   doca_comm_info_id::LOCAL_ABORT_INFO,
             info_payload: 0,
             info_pid: info_pid,
+            info_tid: self.tid,
             info_cid: info_cid,
         });
 
@@ -334,6 +364,7 @@ impl DpuRpcProc {
             info_id:   doca_comm_info_id::REMOTE_READ_INFO,
             info_payload: comm_payload as u32,
             info_pid: meta.peer_id as _,
+            info_tid: self.tid,
             info_cid: meta.rpc_cid,
         });
 
@@ -404,6 +435,7 @@ impl DpuRpcProc {
                 info_id:   doca_comm_info_id::REMOTE_FETCHWRITE_INFO,
                 info_payload: comm_payload as u32,
                 info_pid: meta.peer_id as _,
+                info_tid: self.tid,
                 info_cid: meta.rpc_cid,
             });
 

@@ -56,6 +56,7 @@ pub trait DocaCommHandler {
         info_id: u32,
         info_payload: u32,
         info_pid: u32,
+        info_tid: u32,
         info_cid: u32,
     );
 }
@@ -70,6 +71,7 @@ impl DocaCommHandler for DefaultDocaCommHandler {
         info_id: u32,
         info_payload: u32,
         info_pid: u32,
+        info_tid: u32,
         info_cid: u32,
     ) {
         unimplemented!("comm handler");

@@ -38,8 +38,13 @@ impl HostRpcProc {
         buf: &DocaCommBuf,
         info_payload: u32,
         info_pid: u32,
+        info_tid: u32,
         info_cid: u32,
     ) {
+        if info_tid != self.tid {
+            panic!("what the fuck {} , {} ", info_tid, self.tid);
+        }
+        
         let count = info_payload as usize / std::mem::size_of::<ReadReqItem>();
         let resp_buf = self.scheduler.get_reply_buf(0);
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
@@ -85,8 +90,13 @@ impl HostRpcProc {
         buf: &DocaCommBuf,
         info_payload: u32,
         info_pid: u32,
+        info_tid: u32,
         info_cid: u32,
     ) {
+        if info_tid != self.tid {
+            panic!("what the fuck {} , {} ", info_tid, self.tid);
+        }
+        
         let count = info_payload as usize / std::mem::size_of::<FetchWriteReqItem>();
         let resp_buf = self.scheduler.get_reply_buf(0);
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
