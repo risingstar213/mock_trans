@@ -62,7 +62,7 @@ async fn init_and_run(tid: usize, memdb: Arc<MemDB>) {
         Arc::get_mut_unchecked(&mut scheduler).register_callback(&worker);
     }
 
-    worker.run().await;
+    worker.run(tid as _).await;
 }
 
 pub fn test() {

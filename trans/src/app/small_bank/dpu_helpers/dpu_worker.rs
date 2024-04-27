@@ -92,21 +92,17 @@ impl RpcHandler for SmallBankDpuWorker {
 }
 
 impl SmallBankDpuWorker {
-    async fn main_routine(&self) {
+    async fn main_routine(&self, tid: u32) {
         loop {
             self.scheduler.poll_recvs();
             self.scheduler.poll_sends();
             self.scheduler.poll_comm_chan();
 
-            self.scheduler.yield_now(0).await;
+            // self.scheduler.yield_now(0).await;
         }
     }
 
-    pub async fn run(self: &Arc<Self>) {
-    
-        let self_clone = self.clone();
-        tokio::spawn(async move {
-            self_clone.main_routine().await
-        }).await.unwrap();
+    pub async fn run(self: &Arc<Self>, tid: u32) {
+        self.main_routine(tid).await;
     }
 }
