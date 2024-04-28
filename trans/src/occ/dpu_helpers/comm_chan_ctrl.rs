@@ -18,6 +18,12 @@ pub struct CommChanCtrl {
     success:   bool,
 }
 
+impl Drop for CommChanCtrl {
+    fn drop(&mut self) {
+        self.restart_batch();
+    }
+}
+
 impl CommChanCtrl {
     pub fn new(scheduler: &Arc<AsyncScheduler>, pid: u32, tid: u32, cid: u32) -> Self {
         Self {
@@ -33,6 +39,13 @@ impl CommChanCtrl {
     }
 
     pub fn restart_batch(&mut self) {
+        for info_id in 0u32..6 {
+            if !self.msg_map.contains_key(&info_id) {
+                continue;
+            }
+            let buf = self.msg_map.remove(&info_id).unwrap();
+            self.scheduler.comm_chan_dealloc_buf(buf, self.cid);
+        }
         self.msg_map.clear();
         self.read_seqs.clear();
         self.update_seqs.clear();
@@ -47,7 +60,7 @@ impl CommChanCtrl {
             if !self.msg_map.contains_key(&info_id) {
                 continue;
             }
-            let mut buf = self.msg_map.remove(&info_id).unwrap();
+            let buf = self.msg_map.get_mut(&info_id).unwrap();
             let payload = buf.get_payload() as _;
             buf.set_header(DocaCommHeaderMeta{
                 info_type: doca_comm_info_type::REQ,
@@ -58,8 +71,7 @@ impl CommChanCtrl {
                 info_cid:  self.cid,
             });
 
-            self.scheduler.block_send_info(&mut buf);
-            self.scheduler.comm_chan_dealloc_buf(buf);
+            self.scheduler.block_send_info(buf);
         }
     }
 
@@ -67,7 +79,7 @@ impl CommChanCtrl {
         match self.msg_map.get_mut(&info_id) {
             Some(_) => {}
             None => {
-                let mut buffer = self.scheduler.comm_chan_alloc_buf();
+                let mut buffer = self.scheduler.comm_chan_alloc_buf(self.cid);
                 buffer.set_payload(0);
                 self.msg_map.insert(info_id, buffer);
             }
@@ -87,7 +99,7 @@ impl CommChanCtrl {
 
             }
             None => {
-                let mut buf = self.scheduler.comm_chan_alloc_buf();
+                let mut buf = self.scheduler.comm_chan_alloc_buf(self.cid);
                 buf.set_payload(0);
 
                 unsafe {
@@ -120,7 +132,7 @@ impl CommChanCtrl {
 
             }
             None => {
-                let mut buf = self.scheduler.comm_chan_alloc_buf();
+                let mut buf = self.scheduler.comm_chan_alloc_buf(self.cid);
                 buf.set_payload(0);
 
                 unsafe {
@@ -153,7 +165,7 @@ impl CommChanCtrl {
 
             }
             None => {
-                let mut buf = self.scheduler.comm_chan_alloc_buf();
+                let mut buf = self.scheduler.comm_chan_alloc_buf(self.cid);
                 buf.set_payload(0);
 
                 unsafe {

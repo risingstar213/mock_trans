@@ -17,6 +17,7 @@ use trans::rdma::rcconn::RdmaRcConn;
 use trans::framework::scheduler::AsyncScheduler;
 use trans::memstore::memdb::MemDB;
 use trans::SMALL_BANK_NTHREADS;
+use trans::SMALL_BANK_NROUTINES;
 
 const CONN_PORTS: [&str; 8] = ["7472\0", "7473\0", "7474\0", "7475\0", "7476\0", "7477\0", "7478\0", "7479\0"];
 
@@ -27,7 +28,7 @@ async fn connect_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize, client
     rdma.connect(100, "10.10.10.26\0", CONN_PORTS[tid]).unwrap();
 
     let allocator = rdma.get_allocator();
-    let mut scheduler = Arc::new(AsyncScheduler::new(0, 8, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new(tid, SMALL_BANK_NROUTINES as _, &allocator));
 
     let conn_host = rdma.get_connection(0);
     conn_host.lock().unwrap().init_and_start_recvs().unwrap();

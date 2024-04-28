@@ -40,12 +40,12 @@ impl DocaCommChannel {
         self.chan.recv_req(buf.as_raw_pointer())
     }
 
-    pub fn alloc_buf(&self) -> DocaCommBuf {
-        self.allocator.lock().unwrap().alloc_buf()
+    pub fn alloc_buf(&self, cid: u32) -> DocaCommBuf {
+        self.allocator.lock().unwrap().alloc_buf(cid)
     }
 
-    pub fn dealloc_buf(&self, buf: DocaCommBuf) {
-        self.allocator.lock().unwrap().dealloc_buf(buf);
+    pub fn dealloc_buf(&self, buf: DocaCommBuf, cid: u32) {
+        self.allocator.lock().unwrap().dealloc_buf(buf, cid);
     }
 }
 

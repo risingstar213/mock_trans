@@ -79,7 +79,7 @@ impl DpuRpcProc {
 
         read_cache_writer.block_sync_buf(trans_view);
 
-        let mut comm_reply = self.scheduler.comm_chan_alloc_buf();
+        let mut comm_reply = self.scheduler.comm_chan_alloc_buf(0);
         comm_reply.set_payload(0);
         unsafe { comm_reply.append_item(DocaCommReply { success: true }); }
 
@@ -93,7 +93,7 @@ impl DpuRpcProc {
         });
 
         self.scheduler.block_send_info(&mut comm_reply);
-        self.scheduler.comm_chan_dealloc_buf(comm_reply);
+        self.scheduler.comm_chan_dealloc_buf(comm_reply, 0);
     }
 
     pub fn local_lock_info_handler(
@@ -141,7 +141,7 @@ impl DpuRpcProc {
 
         write_cache_writer.block_sync_buf(trans_view);
 
-        let mut comm_reply = self.scheduler.comm_chan_alloc_buf();
+        let mut comm_reply = self.scheduler.comm_chan_alloc_buf(0);
         comm_reply.set_payload(0);
         unsafe { comm_reply.append_item(DocaCommReply { success: success }); }
 
@@ -155,7 +155,7 @@ impl DpuRpcProc {
         });
 
         self.scheduler.block_send_info(&mut comm_reply);
-        self.scheduler.comm_chan_dealloc_buf(comm_reply);
+        self.scheduler.comm_chan_dealloc_buf(comm_reply, 0);
     }
 
     pub fn local_validate_info_handler(
@@ -195,7 +195,7 @@ impl DpuRpcProc {
 
         trans_view.end_read_trans(&trans_key);
 
-        let mut comm_reply = self.scheduler.comm_chan_alloc_buf();
+        let mut comm_reply = self.scheduler.comm_chan_alloc_buf(0);
         comm_reply.set_payload(0);
         unsafe { comm_reply.append_item(DocaCommReply { success: success }); }
 
@@ -209,7 +209,7 @@ impl DpuRpcProc {
         });
 
         self.scheduler.block_send_info(&mut comm_reply);
-        self.scheduler.comm_chan_dealloc_buf(comm_reply);
+        self.scheduler.comm_chan_dealloc_buf(comm_reply, 0);
     }
 
     pub fn local_release_info_handler(
@@ -241,7 +241,7 @@ impl DpuRpcProc {
 
         trans_view.end_write_trans(&trans_key);
 
-        let mut comm_reply = self.scheduler.comm_chan_alloc_buf();
+        let mut comm_reply = self.scheduler.comm_chan_alloc_buf(0);
         comm_reply.set_payload(0);
 
         comm_reply.set_header(DocaCommHeaderMeta{
@@ -254,7 +254,7 @@ impl DpuRpcProc {
         });
 
         self.scheduler.block_send_info(&mut comm_reply);
-        self.scheduler.comm_chan_dealloc_buf(comm_reply);
+        self.scheduler.comm_chan_dealloc_buf(comm_reply, 0);
     }
 
     pub fn local_abort_info_handler(
@@ -295,7 +295,7 @@ impl DpuRpcProc {
 
         trans_view.end_write_trans(&trans_key);
 
-        let mut comm_reply = self.scheduler.comm_chan_alloc_buf();
+        let mut comm_reply = self.scheduler.comm_chan_alloc_buf(0);
         comm_reply.set_payload(0);
 
         comm_reply.set_header(DocaCommHeaderMeta{
@@ -308,7 +308,7 @@ impl DpuRpcProc {
         });
 
         self.scheduler.block_send_info(&mut comm_reply);
-        self.scheduler.comm_chan_dealloc_buf(comm_reply);
+        self.scheduler.comm_chan_dealloc_buf(comm_reply, 0);
     }
 }
 
@@ -322,7 +322,7 @@ impl DpuRpcProc {
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
         
-        let mut comm_req = self.scheduler.comm_chan_alloc_buf();
+        let mut comm_req = self.scheduler.comm_chan_alloc_buf(0);
         comm_req.set_payload(0);
 
         let trans_key = TransKey::new(self.tid, &meta);
@@ -369,7 +369,7 @@ impl DpuRpcProc {
         });
 
         self.scheduler.block_send_info(&mut comm_req);
-        self.scheduler.comm_chan_dealloc_buf(comm_req);
+        self.scheduler.comm_chan_dealloc_buf(comm_req, 0);
 
     }
 
@@ -382,7 +382,7 @@ impl DpuRpcProc {
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
 
-        let mut comm_req = self.scheduler.comm_chan_alloc_buf();
+        let mut comm_req = self.scheduler.comm_chan_alloc_buf(0);
         comm_req.set_payload(0);
 
         let trans_key = TransKey::new(self.tid, &meta);
@@ -440,11 +440,11 @@ impl DpuRpcProc {
             });
 
             self.scheduler.block_send_info(&mut comm_req);
-            self.scheduler.comm_chan_dealloc_buf(comm_req);
+            self.scheduler.comm_chan_dealloc_buf(comm_req, 0);
             return;
         }
         // 否则，直接返回错误信息
-        self.scheduler.comm_chan_dealloc_buf(comm_req);
+        self.scheduler.comm_chan_dealloc_buf(comm_req, 0);
 
         let resp_buf = self.scheduler.get_reply_buf(0);
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);

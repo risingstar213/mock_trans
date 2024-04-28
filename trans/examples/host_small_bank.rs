@@ -18,6 +18,7 @@ use trans::rdma::rcconn::RdmaRcConn;
 use trans::framework::scheduler::AsyncScheduler;
 use trans::memstore::memdb::ValueDB;
 use trans::SMALL_BANK_NTHREADS;
+use trans::SMALL_BANK_NROUTINES;
 use trans::doca_comm_chan::connection::DocaCommChannel;
 
 const CONN_PORTS: [&str; 8] = ["7472\0", "7473\0", "7474\0", "7475\0", "7476\0", "7477\0", "7478\0", "7479\0"];
@@ -35,7 +36,7 @@ async fn init_and_run(tid: usize, valuedb: Arc<ValueDB>, rand_seed: usize, clien
 
     // scheduler
     let allocator = rdma.get_allocator();
-    let mut scheduler = Arc::new(AsyncScheduler::new(tid, 8, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new(tid, SMALL_BANK_NROUTINES as _, &allocator));
 
     // scheduler add comm chan
     unsafe {

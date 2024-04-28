@@ -1,4 +1,6 @@
 use std::sync::Arc;
+use std::time::Duration;
+use std::thread::sleep;
 
 use crate::common::random::FastRandom;
 use crate::memstore::memdb::MemDB;
@@ -98,6 +100,8 @@ impl SmallBankDpuWorker {
             self.scheduler.poll_recvs();
             self.scheduler.poll_sends();
             self.scheduler.poll_comm_chan();
+
+            // sleep(Duration::from_millis(1));
 
             // self.scheduler.yield_now(0).await;
         }

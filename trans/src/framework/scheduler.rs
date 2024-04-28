@@ -443,13 +443,15 @@ impl AsyncScheduler {
     }
 
     #[inline]
-    pub fn comm_chan_alloc_buf(&self) -> DocaCommBuf {
-        self.comm_chan.as_ref().unwrap().alloc_buf()
+    pub fn comm_chan_alloc_buf(&self, cid: u32) -> DocaCommBuf {
+        // println!("({}){} alloc buf", self.tid,cid);
+        self.comm_chan.as_ref().unwrap().alloc_buf(cid)
     }
 
     #[inline]
-    pub fn comm_chan_dealloc_buf(&self, buf: DocaCommBuf) {
-        self.comm_chan.as_ref().unwrap().dealloc_buf(buf);
+    pub fn comm_chan_dealloc_buf(&self, buf: DocaCommBuf, cid: u32) {
+        // println!("({}){} dealloc buf", self.tid,cid);
+        self.comm_chan.as_ref().unwrap().dealloc_buf(buf, cid);
     }
 
     pub fn block_send_info(&self, buf: &mut DocaCommBuf) {
@@ -462,7 +464,7 @@ impl AsyncScheduler {
     }
 
     pub fn poll_comm_chan(&self) {
-        let mut recv_buf = self.comm_chan_alloc_buf();
+        let mut recv_buf = self.comm_chan_alloc_buf(0);
         loop {
             recv_buf.set_payload(MAX_CONN_MSG_SIZE);
             let res = self.comm_chan.as_ref().unwrap().recv_info(&mut recv_buf);
@@ -489,7 +491,10 @@ impl AsyncScheduler {
                         std::ptr::copy_nonoverlapping(recv_buf.get_const_ptr(), write_ptr, header.info_payload as usize);
                     }
                     if replys[header.info_cid as usize].get_pending_count() == 0 {
-                        println!("what the fuck? {:?}", header);                        
+                        println!("what the fuck? self.tid:{}, header: {:?}", self.tid, header);  
+                        for i in 0..replys.len() {
+                            println!("{} pendingnum {}", i, replys[i].get_pending_count());
+                        }                      
                     }
                     replys[header.info_cid as usize].append_reply(header.info_payload as usize);
                 }
@@ -497,7 +502,7 @@ impl AsyncScheduler {
             }
         }
 
-        self.comm_chan_dealloc_buf(recv_buf);
+        self.comm_chan_dealloc_buf(recv_buf, 0);
     }
 
     pub async fn yield_until_comm_ready(&self, cid: u32) -> DocaCommReplyWrapper {
@@ -510,7 +515,7 @@ impl AsyncScheduler {
                 let now = std::time::SystemTime::now();
                 let duration = now.duration_since(start).unwrap();
                 if duration.as_millis() > 5000 {
-                    println!("wait dpu comm too long {}, count:{} ", cid, count);
+                    println!("({})wait dpu comm too long {}, count:{} ", self.tid, cid, count);
                     start = now;
                     count += 1;
                 }

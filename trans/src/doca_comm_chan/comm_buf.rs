@@ -20,7 +20,7 @@ impl DocaCommBuf {
         let pointer = unsafe {
             RawPointer::from_raw_ptr(
                 buf.as_mut_ptr(), 
-                0
+                4
             )
         };
 
@@ -90,11 +90,14 @@ impl DocaCommBufAllocator {
         }
     }
 
-    pub fn alloc_buf(&mut self) -> DocaCommBuf {
+    pub fn alloc_buf(&mut self, cid: u32) -> DocaCommBuf {
+        if self.buf_pool.len() < 10 {
+            println!("what the fuck, why so many bufs?");
+        }
         self.buf_pool.pop_front().unwrap()
     }
 
-    pub fn dealloc_buf(&mut self, buf: DocaCommBuf) {
+    pub fn dealloc_buf(&mut self, buf: DocaCommBuf, cid: u32) {
         self.buf_pool.push_back(buf);
     }
 }
