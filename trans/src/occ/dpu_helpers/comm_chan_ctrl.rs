@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::doca_comm_chan::{ doca_comm_info_type, DocaCommHeaderMeta };
 use crate::doca_comm_chan::comm_buf::DocaCommBuf;
@@ -13,7 +13,9 @@ pub struct CommChanCtrl {
     cid:       u32,
     ver:       u32,
     scheduler: Arc<AsyncScheduler>,
-    msg_map:   HashMap<u32, DocaCommBuf>,
+    msg_set:   HashSet<u32>,
+    read_infos: Vec<LocalReadInfoItem>,
+    lock_infos: Vec<LocalLockInfoItem>,
     read_seqs: Vec<ReadReqItem>,
     update_seqs: Vec<FetchWriteReqItem>,
     success:   bool,
@@ -33,7 +35,9 @@ impl CommChanCtrl {
             cid:       cid,
             ver:       scheduler.alloc_new_ver(cid),
             scheduler: scheduler.clone(),
-            msg_map:  HashMap::new(),
+            msg_set:  HashSet::new(),
+            read_infos: Vec::new(),
+            lock_infos: Vec::new(),
             read_seqs: Vec::new(),
             update_seqs: Vec::new(),
             success: true,
@@ -41,78 +45,84 @@ impl CommChanCtrl {
     }
 
     pub fn restart_batch(&mut self) {
-        for info_id in 0u32..6 {
-            if !self.msg_map.contains_key(&info_id) {
-                continue;
-            }
-            let buf = self.msg_map.remove(&info_id).unwrap();
-            self.scheduler.comm_chan_dealloc_buf(buf, self.cid);
-        }
-        self.msg_map.clear();
+        self.msg_set.clear();
+        self.read_infos.clear();
+        self.lock_infos.clear();
         self.read_seqs.clear();
         self.update_seqs.clear();
         self.success = true;
     }
 
     pub fn send_comm_info(&mut self) {
-        let info_num = self.msg_map.len();
+        let mut info_num = self.msg_set.len();
+        if !self.read_infos.is_empty() {
+            info_num += 1;
+        }
+        if !self.lock_infos.is_empty() {
+            info_num += 1;
+        }
         self.scheduler.prepare_comm_replys(self.cid, info_num);
-        
-        for info_id in 0u32..6 {
-            if !self.msg_map.contains_key(&info_id) {
-                continue;
-            }
-            let buf = self.msg_map.get_mut(&info_id).unwrap();
-            let payload = buf.get_payload() as _;
-            buf.set_header(DocaCommHeaderMeta{
-                info_type: doca_comm_info_type::REQ as _,
-                info_id:   info_id as _,
-                info_payload: payload,
-                info_pid:  self.pid as _,
-                info_tid:  self.tid as _,
-                info_cid:  self.cid as _,
-            });
 
-            self.scheduler.block_send_info(buf);
+        if !self.read_infos.is_empty() {
+            let payload = std::mem::size_of::<LocalReadInfoItem>() * self.read_infos.len();
+            let header = DocaCommHeaderMeta {
+                info_type:    doca_comm_info_type::REQ,
+                info_id:      doca_comm_info_id::LOCAL_READ_INFO,
+                info_payload: payload as _,
+                info_pid:     self.pid,
+                info_tid:     self.tid,
+                info_cid:     self.cid,
+            };
+
+            self.scheduler.comm_chan_append_slice_info(
+                header, 
+                self.read_infos.as_slice(),
+            );
+        }
+
+        if !self.lock_infos.is_empty() {
+            let payload = std::mem::size_of::<LocalLockInfoItem>() * self.lock_infos.len();
+            let header = DocaCommHeaderMeta {
+                info_type:    doca_comm_info_type::REQ,
+                info_id:      doca_comm_info_id::LOCAL_LOCK_INFO,
+                info_payload: payload as _,
+                info_pid:     self.pid,
+                info_tid:     self.tid,
+                info_cid:     self.cid,
+            };
+
+            self.scheduler.comm_chan_append_slice_info(
+                header, 
+                self.lock_infos.as_slice(),
+            );
+        }
+        
+        for info_id in &self.msg_set {
+            self.scheduler.comm_chan_append_empty_info(DocaCommHeaderMeta{
+                info_type:    doca_comm_info_type::REQ,
+                info_id:      *info_id,
+                info_payload: 0,
+                info_pid:     self.pid,
+                info_tid:     self.tid,
+                info_cid:     self.cid,
+            });
         }
     }
 
     pub fn append_info(&mut self, info_id: u32) {
-        match self.msg_map.get_mut(&info_id) {
+        match self.msg_set.get(&info_id) {
             Some(_) => {}
             None => {
-                let mut buffer = self.scheduler.comm_chan_alloc_buf(self.cid);
-                buffer.set_payload(0);
-                self.msg_map.insert(info_id, buffer);
+                self.msg_set.insert(info_id);
             }
         }
     }
 
     pub fn append_read(&mut self, table_id: usize, key: u64, read_idx: usize) {
-        let info_id = doca_comm_info_id::LOCAL_READ_INFO;
-        match self.msg_map.get_mut(&info_id) {
-            Some(buf) => {
-                unsafe {
-                    buf.append_item(LocalReadInfoItem{
-                        table_id: table_id,
-                        key:      key,
-                    });
-                }
-
-            }
-            None => {
-                let mut buf = self.scheduler.comm_chan_alloc_buf(self.cid);
-                buf.set_payload(0);
-
-                unsafe {
-                    buf.append_item(LocalReadInfoItem{
-                        table_id: table_id,
-                        key:      key,
-                    });
-                }
-                self.msg_map.insert(info_id, buf);
-            }
-        }
+        self.read_infos.push(LocalReadInfoItem{
+            table_id: table_id,
+            key:      key,
+        });
 
         self.read_seqs.push(ReadReqItem{
             table_id: table_id,
@@ -122,30 +132,10 @@ impl CommChanCtrl {
     }
 
     pub fn append_update(&mut self, table_id: usize, key: u64, update_idx: usize) {
-        let info_id = doca_comm_info_id::LOCAL_LOCK_INFO;
-        match self.msg_map.get_mut(&info_id) {
-            Some(buf) => {
-                unsafe {
-                    buf.append_item(LocalLockInfoItem{
-                        table_id: table_id,
-                        key:      key,
-                    });
-                }
-
-            }
-            None => {
-                let mut buf = self.scheduler.comm_chan_alloc_buf(self.cid);
-                buf.set_payload(0);
-
-                unsafe {
-                    buf.append_item(LocalLockInfoItem{
-                        table_id: table_id,
-                        key:      key,
-                    });
-                }
-                self.msg_map.insert(info_id, buf);
-            }
-        }
+        self.lock_infos.push(LocalLockInfoItem{
+            table_id: table_id,
+            key:      key,
+        });
 
         self.update_seqs.push(FetchWriteReqItem{
             table_id:   table_id,
@@ -155,30 +145,10 @@ impl CommChanCtrl {
     }
 
     pub fn append_lock(&mut self, table_id: usize, key: u64) {
-        let info_id = doca_comm_info_id::LOCAL_LOCK_INFO;
-        match self.msg_map.get_mut(&info_id) {
-            Some(buf) => {
-                unsafe {
-                    buf.append_item(LocalLockInfoItem{
-                        table_id: table_id,
-                        key:      key,
-                    });
-                }
-
-            }
-            None => {
-                let mut buf = self.scheduler.comm_chan_alloc_buf(self.cid);
-                buf.set_payload(0);
-
-                unsafe {
-                    buf.append_item(LocalLockInfoItem{
-                        table_id: table_id,
-                        key:      key,
-                    });
-                }
-                self.msg_map.insert(info_id, buf);
-            }
-        }
+        self.lock_infos.push(LocalLockInfoItem{
+            table_id: table_id,
+            key:      key,
+        });
     }
 
     pub fn get_read_seqs(&self) -> &Vec<ReadReqItem> {
@@ -190,17 +160,7 @@ impl CommChanCtrl {
     }
 
     pub async fn wait_until_done(&mut self) {
-        let replys = self.scheduler.yield_until_comm_ready(self.cid).await;
-    
-        let two_answer = (self.update_seqs.len() > 0) && (self.read_seqs.len() > 0);
-        
-        let success0 = replys.get_item::<DocaCommReply>(0).success;
-        let mut success1 = true;
-        if two_answer {
-            success1 = replys.get_item::<DocaCommReply>(std::mem::size_of::<DocaCommReply>()).success;
-        }
-
-        self.success = success0 && success1;
+        self.success = self.scheduler.yield_until_comm_ready(self.cid).await;
     }
 
     pub fn get_success(&self) -> bool {

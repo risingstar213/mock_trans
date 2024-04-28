@@ -6,7 +6,7 @@ pub mod host_rpc_proc;
 #[repr(C)]
 #[derive(Clone)]
 pub struct DocaCommReply {
-    success: bool,
+    success: u32,
 }
 
 pub mod doca_comm_info_id {

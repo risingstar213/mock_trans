@@ -25,10 +25,10 @@ use crate::doca_comm_chan::connection::DocaCommChannel;
 use crate::doca_comm_chan::connection::{ DocaCommHandler, DEFAULT_DOCA_CONN_HANDLER };
 
 #[cfg(feature = "doca_deps")]
-use crate::doca_comm_chan::comm_buf::{ DocaCommBuf, DocaCommReply, DocaCommReplyWrapper };
+use crate::doca_comm_chan::comm_buf::{ DocaCommBuf, DocaCommReply };
 
 #[cfg(feature = "doca_deps")]
-use crate::doca_comm_chan::doca_comm_info_type;
+use crate::doca_comm_chan::{ doca_comm_info_type, DocaCommHeaderMeta };
 
 use super::rpc_shared_buffer::RpcBufAllocator;
 
@@ -469,8 +469,16 @@ impl AsyncScheduler {
         self.comm_chan.as_ref().unwrap().dealloc_buf(buf, cid);
     }
 
-    pub fn block_send_info(&self, buf: &mut DocaCommBuf) {
-        self.comm_chan.as_ref().unwrap().block_send_info(buf);
+    pub fn comm_chan_append_empty_info(&self, header: DocaCommHeaderMeta) {
+        self.comm_chan.as_ref().unwrap().append_empty_msg(header);
+    }
+
+    pub fn comm_chan_append_item_info<ITEM: Clone>(&self, header: DocaCommHeaderMeta, item: ITEM) {
+        self.comm_chan.as_ref().unwrap().append_item_msg(header, item);
+    }
+
+    pub fn comm_chan_append_slice_info<ITEM: Clone>(&self, header: DocaCommHeaderMeta, items: &[ITEM]) {
+        self.comm_chan.as_ref().unwrap().append_slice_msg(header, items);
     }
 
     pub fn prepare_comm_replys(&self, cid: u32, count: usize) {
@@ -489,46 +497,59 @@ impl AsyncScheduler {
             if res != DOCAError::DOCA_SUCCESS {
                 panic!("the connection is lost {}", self.tid);
             }
-            let header = recv_buf.get_header();
-            match header.info_type as u32 {
-                doca_comm_info_type::REQ => {
-                    self.comm_handler.upgrade().unwrap().comm_handler(
-                        &recv_buf,
-                        header.info_id as _,
-                        header.info_payload as _,
-                        header.info_pid as _,
-                        header.info_tid as _,
-                        header.info_cid as _,
-                    );
-                }
-                doca_comm_info_type::REPLY => {
-                    let replys = unsafe { self.comm_replys.get().as_mut().unwrap() };
-                    
-                    let write_ptr = unsafe { replys[header.info_cid as usize].get_mut_ptr() };
-                    unsafe {
-                        std::ptr::copy_nonoverlapping(recv_buf.get_const_ptr(), write_ptr, header.info_payload as usize);
-                    }
 
-                    let vers = unsafe { self.vers.get().as_mut().unwrap() };
-                    let local_ver = vers[header.info_cid as usize];
+            recv_buf.start_read();
 
-                    if replys[header.info_cid as usize].get_pending_count() == 0 {
-                        println!("what the fuck? self.tid:{}, ver: {} , header: {:?}", self.tid, local_ver, header);  
-                        for i in 0..replys.len() {
-                            println!("{} pendingnum {}", i, replys[i].get_pending_count());
-                        }                      
-                    } else {
-                        replys[header.info_cid as usize].append_reply(header.info_payload as usize);
+            // println!("recv {}", recv_buf.get_payload());
+
+            while let Some(header) = recv_buf.get_header() {
+                match header.info_type as u32 {
+                    doca_comm_info_type::REQ => {
+                        // println!("REQ({})", header.info_payload);
+                        self.comm_handler.upgrade().unwrap().comm_handler(
+                            &recv_buf,
+                            header.info_id as _,
+                            header.info_payload as _,
+                            header.info_pid as _,
+                            header.info_tid as _,
+                            header.info_cid as _,
+                        );
                     }
+                    doca_comm_info_type::REPLY => {
+                        // println!("REPLY({})", header.info_payload);
+                        let replys = unsafe { self.comm_replys.get().as_mut().unwrap() };
+                        
+                        let reply_success = if header.info_payload > 0 {
+                            let success = recv_buf.get_item::<u32>(0);
+                            *success
+                        } else {
+                            1
+                        };
+    
+                        let vers = unsafe { self.vers.get().as_mut().unwrap() };
+                        let local_ver = vers[header.info_cid as usize];
+    
+                        if replys[header.info_cid as usize].get_pending_count() == 0 {
+                            println!("what the fuck? self.tid:{}, ver: {} , header: {:?}", self.tid, local_ver, header);  
+                            for i in 0..replys.len() {
+                                println!("{} pendingnum {}", i, replys[i].get_pending_count());
+                            }                      
+                        } else {
+                            replys[header.info_cid as usize].append_reply(reply_success);
+                        }
+                    }
+                    _ => { panic!("unsupported!, read_idx: {}", recv_buf.get_read_idx()); }
                 }
-                _ => { panic!("unsupported!"); }
+
+                recv_buf.shift_to_next_msg(header.info_payload);
             }
         }
-
         self.comm_chan_dealloc_buf(recv_buf, 0);
+
+        self.comm_chan.as_ref().unwrap().flush_pending_msgs();
     }
 
-    pub async fn yield_until_comm_ready(&self, cid: u32) -> DocaCommReplyWrapper {
+    pub async fn yield_until_comm_ready(&self, cid: u32) -> bool {
         let mut count = 0;
         let mut start = std::time::SystemTime::now();
         loop {
@@ -544,10 +565,7 @@ impl AsyncScheduler {
                 }
                 self.yield_now(cid).await;
             } else {
-                unsafe {
-                    let ptr = comm_replys[cid as usize].get_const_head_ptr();
-                    return DocaCommReplyWrapper::new(ptr);
-                }
+                return comm_replys[cid as usize].get_success();
             }
         }
     }

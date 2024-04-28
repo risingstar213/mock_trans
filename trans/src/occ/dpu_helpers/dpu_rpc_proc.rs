@@ -28,7 +28,6 @@ pub struct DpuRpcProc {
     pub memdb:      Arc<MemDB>,
     pub scheduler:  Arc<AsyncScheduler>,
     pub trans_view: UnsafeCell<TransCacheView>,
-    pub reply_bufs: UnsafeCell<HashMap<u32, DocaCommBuf>>
 }
 
 unsafe impl Send for DpuRpcProc {}
@@ -41,7 +40,6 @@ impl DpuRpcProc {
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
             trans_view: UnsafeCell::new(TransCacheView::new(scheduler)),
-            reply_bufs: UnsafeCell::new(HashMap::new())
         }
     }
 }
@@ -83,25 +81,16 @@ impl DpuRpcProc {
 
         read_cache_writer.block_sync_buf(trans_view);
 
-        let reply_bufs = unsafe { self.reply_bufs.get().as_mut().unwrap() };
-        if let None = reply_bufs.get_mut(&info_cid) {
-            reply_bufs.insert(info_cid, self.scheduler.comm_chan_alloc_buf(0));
-        }
-
-        let comm_reply = reply_bufs.get_mut(&info_cid).unwrap();
-        comm_reply.set_payload(0);
-        unsafe { comm_reply.append_item(DocaCommReply { success: true }); }
-
-        comm_reply.set_header(DocaCommHeaderMeta{
+        let header = DocaCommHeaderMeta{
             info_type: doca_comm_info_type::REPLY as _,
             info_id:   doca_comm_info_id::LOCAL_READ_INFO as _,
             info_payload: std::mem::size_of::<DocaCommReply>() as _,
             info_pid: info_pid as _,
             info_tid: self.tid as _,
             info_cid: info_cid as _,
-        });
+        };
 
-        self.scheduler.block_send_info(comm_reply);
+        self.scheduler.comm_chan_append_item_info(header, DocaCommReply { success: 1 });
     }
 
     pub fn local_lock_info_handler(
@@ -149,25 +138,16 @@ impl DpuRpcProc {
 
         write_cache_writer.block_sync_buf(trans_view);
 
-        let reply_bufs = unsafe { self.reply_bufs.get().as_mut().unwrap() };
-        if let None = reply_bufs.get_mut(&info_cid) {
-            reply_bufs.insert(info_cid, self.scheduler.comm_chan_alloc_buf(0));
-        }
-
-        let comm_reply = reply_bufs.get_mut(&info_cid).unwrap();
-        comm_reply.set_payload(0);
-        unsafe { comm_reply.append_item(DocaCommReply { success: success }); }
-
-        comm_reply.set_header(DocaCommHeaderMeta{
+        let header = DocaCommHeaderMeta{
             info_type: doca_comm_info_type::REPLY as _,
             info_id:   doca_comm_info_id::LOCAL_LOCK_INFO as _,
             info_payload: std::mem::size_of::<DocaCommReply>() as _,
             info_pid: info_pid as _,
             info_tid: self.tid as _,
             info_cid: info_cid as _,
-        });
+        };
 
-        self.scheduler.block_send_info(comm_reply);
+        self.scheduler.comm_chan_append_item_info(header, DocaCommReply { success: success as _ });
     }
 
     pub fn local_validate_info_handler(
@@ -207,25 +187,16 @@ impl DpuRpcProc {
 
         trans_view.end_read_trans(&trans_key);
 
-        let reply_bufs = unsafe { self.reply_bufs.get().as_mut().unwrap() };
-        if let None = reply_bufs.get_mut(&info_cid) {
-            reply_bufs.insert(info_cid, self.scheduler.comm_chan_alloc_buf(0));
-        }
-
-        let comm_reply = reply_bufs.get_mut(&info_cid).unwrap();
-        comm_reply.set_payload(0);
-        unsafe { comm_reply.append_item(DocaCommReply { success: success }); }
-
-        comm_reply.set_header(DocaCommHeaderMeta{
+        let header = DocaCommHeaderMeta{
             info_type: doca_comm_info_type::REPLY as _,
             info_id:   doca_comm_info_id::LOCAL_VALIDATE_INFO as _,
             info_payload: std::mem::size_of::<DocaCommReply>() as _,
             info_pid: info_pid as _,
             info_tid: self.tid as _,
             info_cid: info_cid as _,
-        });
+        };
 
-        self.scheduler.block_send_info(comm_reply);
+        self.scheduler.comm_chan_append_item_info(header, DocaCommReply { success: success as _ });
     }
 
     pub fn local_release_info_handler(
@@ -257,24 +228,16 @@ impl DpuRpcProc {
 
         trans_view.end_write_trans(&trans_key);
 
-        let reply_bufs = unsafe { self.reply_bufs.get().as_mut().unwrap() };
-        if let None = reply_bufs.get_mut(&info_cid) {
-            reply_bufs.insert(info_cid, self.scheduler.comm_chan_alloc_buf(0));
-        }
-
-        let comm_reply = reply_bufs.get_mut(&info_cid).unwrap();
-        comm_reply.set_payload(0);
-
-        comm_reply.set_header(DocaCommHeaderMeta{
+        let header = DocaCommHeaderMeta{
             info_type: doca_comm_info_type::REPLY as _,
             info_id:   doca_comm_info_id::LOCAL_RELEASE_INFO as _,
             info_payload: 0,
             info_pid: info_pid as _,
             info_tid: self.tid as _,
             info_cid: info_cid as _,
-        });
+        };
 
-        self.scheduler.block_send_info(comm_reply);
+        self.scheduler.comm_chan_append_empty_info(header);
     }
 
     pub fn local_abort_info_handler(
@@ -315,24 +278,16 @@ impl DpuRpcProc {
 
         trans_view.end_write_trans(&trans_key);
 
-        let reply_bufs = unsafe { self.reply_bufs.get().as_mut().unwrap() };
-        if let None = reply_bufs.get_mut(&info_cid) {
-            reply_bufs.insert(info_cid, self.scheduler.comm_chan_alloc_buf(0));
-        }
-
-        let comm_reply = reply_bufs.get_mut(&info_cid).unwrap();
-        comm_reply.set_payload(0);
-
-        comm_reply.set_header(DocaCommHeaderMeta{
+        let header = DocaCommHeaderMeta{
             info_type: doca_comm_info_type::REPLY as _,
             info_id:   doca_comm_info_id::LOCAL_ABORT_INFO as _,
             info_payload: 0,
             info_pid: info_pid as _,
             info_tid: self.tid as _,
             info_cid: info_cid as _,
-        });
+        };
 
-        self.scheduler.block_send_info(comm_reply);
+        self.scheduler.comm_chan_append_empty_info(header);
     }
 }
 
@@ -345,9 +300,6 @@ impl DpuRpcProc {
         meta: RpcProcessMeta
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
-        
-        let mut comm_req = self.scheduler.comm_chan_alloc_buf(0);
-        comm_req.set_payload(0);
 
         let trans_key = TransKey::new(self.tid, &meta);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
@@ -355,6 +307,8 @@ impl DpuRpcProc {
         let mut read_cache_writer = trans_view.new_read_cache_writer(&trans_key, MAIN_ROUTINE_ID);
 
         let req_header = req_wrapper.get_header();
+
+        let mut read_items = Vec::new();
 
         for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<ReadReqItem>();
@@ -364,9 +318,7 @@ impl DpuRpcProc {
                 req_item.key, 
             ).unwrap();
 
-            unsafe {
-                comm_req.append_item(req_item.clone());
-            }
+            read_items.push(req_item.clone());
 
             read_cache_writer.block_append_item(trans_view, CacheReadSetItem{
                 table_id: req_item.table_id, 
@@ -379,19 +331,18 @@ impl DpuRpcProc {
 
         read_cache_writer.block_sync_buf(trans_view);
 
-        let comm_payload = comm_req.get_payload();
+        let payload = std::mem::size_of::<ReadReqItem>() * req_header.num as usize;
 
-        comm_req.set_header(DocaCommHeaderMeta{
+        let header = DocaCommHeaderMeta{
             info_type: doca_comm_info_type::REQ as _,
             info_id:   doca_comm_info_id::REMOTE_READ_INFO as _,
-            info_payload: comm_payload as _,
+            info_payload: payload as _,
             info_pid: meta.peer_id as _,
             info_tid: self.tid as _,
             info_cid: meta.rpc_cid as _,
-        });
+        };
 
-        self.scheduler.block_send_info(&mut comm_req);
-        self.scheduler.comm_chan_dealloc_buf(comm_req, 0);
+        self.scheduler.comm_chan_append_slice_info(header, read_items.as_slice());
 
     }
 
@@ -404,9 +355,6 @@ impl DpuRpcProc {
     ) {
         let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
 
-        let mut comm_req = self.scheduler.comm_chan_alloc_buf(0);
-        comm_req.set_payload(0);
-
         let trans_key = TransKey::new(self.tid, &meta);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
         trans_view.start_write_trans(&trans_key);
@@ -416,6 +364,8 @@ impl DpuRpcProc {
 
         let mut lock_success = true;
         let lock_content = LockContent::new(meta.peer_id, self.tid as _, meta.rpc_cid);
+
+        let mut fetch_items = Vec::new();
 
         for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
@@ -430,9 +380,8 @@ impl DpuRpcProc {
                 lock_success = false;
                 break;
             } else {
-                unsafe {
-                    comm_req.append_item(req_item.clone());
-                }
+                
+                fetch_items.push(req_item.clone());
 
                 write_cache_writer.block_append_item(trans_view, CacheWriteSetItem{
                     table_id: req_item.table_id, 
@@ -448,23 +397,21 @@ impl DpuRpcProc {
 
         // 加锁成功，则向上递交 read 请求
         if lock_success {
-            let comm_payload = comm_req.get_payload();
+            let payload = std::mem::size_of::<ReadReqItem>() * req_header.num as usize;
 
-            comm_req.set_header(DocaCommHeaderMeta{
+            let header = DocaCommHeaderMeta{
                 info_type: doca_comm_info_type::REQ as _,
                 info_id:   doca_comm_info_id::REMOTE_FETCHWRITE_INFO as _,
-                info_payload: comm_payload as _,
+                info_payload: payload as _,
                 info_pid: meta.peer_id as _,
                 info_tid: self.tid as _,
                 info_cid: meta.rpc_cid as _,
-            });
+            };
 
-            self.scheduler.block_send_info(&mut comm_req);
-            self.scheduler.comm_chan_dealloc_buf(comm_req, 0);
+            self.scheduler.comm_chan_append_slice_info(header, fetch_items.as_slice());
             return;
         }
         // 否则，直接返回错误信息
-        self.scheduler.comm_chan_dealloc_buf(comm_req, 0);
 
         let resp_buf = self.scheduler.get_reply_buf(0);
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
