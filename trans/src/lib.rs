@@ -54,7 +54,7 @@ const MAX_DMA_BUF_REMOTE: usize = 128;
 const MAX_DMA_BUF_PER_ROUTINE: usize = 16;
 
 /////////////////// DOCA CONN /////////////////////////
-const MAX_CONN_INFO_BUFS: usize = 20;
+const MAX_CONN_INFO_BUFS: usize = 128;
 const MAX_CONN_MSG_SIZE: usize = 256;
 
 /////////////////// CACHE /////////////////////////////
@@ -65,7 +65,7 @@ const MAIN_ROUTINE_ID: u32 = 0;
 
 /////////////////// Small Bank Wokeloads //////////////
 const SMALL_BANK_NROUTINES: usize = 8;
-pub const SMALL_BANK_NTHREADS: usize = 8;
+pub const SMALL_BANK_NTHREADS: usize = 1;
 const SMALL_BANK_NPARTITIONS:  usize = 2;
 const SMALL_BANK_DEFAULT_NACCOUNTS: usize = 1000;
 const SMALL_BANK_DEFAULT_NHOTACCOUTS: usize = 40;

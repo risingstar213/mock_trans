@@ -1,6 +1,8 @@
 use std::pin::Pin;
 use doca::RawPointer;
 
+use std::collections::vec_deque::VecDeque;
+
 use crate::{ MAX_CONN_INFO_BUFS, MAX_CONN_MSG_SIZE };
 use super::DocaCommHeaderMeta;
 
@@ -73,14 +75,14 @@ impl DocaCommBuf {
 }
 
 pub struct DocaCommBufAllocator {
-    buf_pool: Vec<DocaCommBuf>,
+    buf_pool: VecDeque<DocaCommBuf>,
 }
 
 impl DocaCommBufAllocator {
     pub fn new() -> Self {
-        let mut pool = Vec::new();
+        let mut pool = VecDeque::new();
         for _ in 0..MAX_CONN_INFO_BUFS {
-            pool.push(DocaCommBuf::new())
+            pool.push_back(DocaCommBuf::new())
         }
 
         Self {
@@ -89,11 +91,11 @@ impl DocaCommBufAllocator {
     }
 
     pub fn alloc_buf(&mut self) -> DocaCommBuf {
-        self.buf_pool.pop().unwrap()
+        self.buf_pool.pop_front().unwrap()
     }
 
     pub fn dealloc_buf(&mut self, buf: DocaCommBuf) {
-        self.buf_pool.push(buf);
+        self.buf_pool.push_back(buf);
     }
 }
 
