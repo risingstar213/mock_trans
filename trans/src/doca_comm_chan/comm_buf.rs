@@ -7,7 +7,7 @@ use crate::{ MAX_CONN_INFO_BUFS, MAX_CONN_MSG_SIZE };
 use super::DocaCommHeaderMeta;
 
 pub struct DocaCommBuf {
-    buf: Pin<Box<[u8; MAX_CONN_MSG_SIZE + 4]>>,
+    buf: Pin<Box<[u8; MAX_CONN_MSG_SIZE + 8]>>,
     pointer: RawPointer,
 }
 
@@ -16,11 +16,11 @@ unsafe impl Sync for DocaCommBuf {}
 
 impl DocaCommBuf {
     pub fn new() -> Self {
-        let mut buf = Box::pin([0u8; MAX_CONN_MSG_SIZE + 4]);
+        let mut buf = Box::pin([0u8; MAX_CONN_MSG_SIZE + 8]);
         let pointer = unsafe {
             RawPointer::from_raw_ptr(
                 buf.as_mut_ptr(), 
-                4
+                8
             )
         };
 
@@ -35,35 +35,35 @@ impl DocaCommBuf {
     }
 
     pub fn get_header(&self) -> DocaCommHeaderMeta {
-        let header = unsafe { *(self.buf.as_ptr() as *const u32).as_ref().unwrap() };
+        let header = unsafe { *(self.buf.as_ptr() as *const u64).as_ref().unwrap() };
         DocaCommHeaderMeta::from_header(header)
     }
 
     pub unsafe fn get_item<ITEM:Clone>(&self, idx: usize) -> &ITEM {
         unsafe {
-            let ptr = self.buf.as_ptr().byte_add(4 + idx * std::mem::size_of::<ITEM>());
+            let ptr = self.buf.as_ptr().byte_add(8 + idx * std::mem::size_of::<ITEM>());
             (ptr as *const ITEM).as_ref().unwrap()
         }
     }
 
     pub unsafe fn get_const_ptr(&self) -> *const u8 {
-        self.buf.as_ptr().byte_add(4)
+        self.buf.as_ptr().byte_add(8)
     }
 
     #[inline]
     pub fn set_header(&mut self, meta: DocaCommHeaderMeta) {
-        let header = unsafe { (self.buf.as_mut_ptr() as *mut u32).as_mut().unwrap() };
+        let header = unsafe { (self.buf.as_mut_ptr() as *mut u64).as_mut().unwrap() };
         *header = meta.to_header();
     }
 
     #[inline]
     pub fn set_payload(&mut self, payload: usize) {
-        self.pointer.payload = payload + 4;
+        self.pointer.payload = payload + 8;
     }
 
     #[inline]
     pub fn get_payload(&mut self) -> usize {
-        self.pointer.payload - 4
+        self.pointer.payload - 8
     }
 
     #[inline]

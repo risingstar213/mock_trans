@@ -11,6 +11,7 @@ pub struct CommChanCtrl {
     pid:       u32,
     tid:       u32,
     cid:       u32,
+    ver:       u32,
     scheduler: Arc<AsyncScheduler>,
     msg_map:   HashMap<u32, DocaCommBuf>,
     read_seqs: Vec<ReadReqItem>,
@@ -30,6 +31,7 @@ impl CommChanCtrl {
             pid:       pid,
             tid:       tid,
             cid:       cid,
+            ver:       scheduler.alloc_new_ver(cid),
             scheduler: scheduler.clone(),
             msg_map:  HashMap::new(),
             read_seqs: Vec::new(),
@@ -63,12 +65,13 @@ impl CommChanCtrl {
             let buf = self.msg_map.get_mut(&info_id).unwrap();
             let payload = buf.get_payload() as _;
             buf.set_header(DocaCommHeaderMeta{
-                info_type: doca_comm_info_type::REQ,
-                info_id:   info_id,
+                info_type: doca_comm_info_type::REQ as _,
+                info_id:   info_id as _,
                 info_payload: payload,
-                info_pid:  self.pid,
-                info_tid:  self.tid,
-                info_cid:  self.cid,
+                info_pid:  self.pid as _,
+                info_tid:  self.tid as _,
+                info_cid:  self.cid as _,
+                info_ver:  self.ver as _,
             });
 
             self.scheduler.block_send_info(buf);

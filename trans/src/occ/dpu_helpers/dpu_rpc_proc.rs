@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::hash::Hash;
 use std::sync::Arc;
 use std::cell::UnsafeCell;
 use log::debug;
@@ -25,7 +27,8 @@ pub struct DpuRpcProc {
     pub tid:        u32,
     pub memdb:      Arc<MemDB>,
     pub scheduler:  Arc<AsyncScheduler>,
-    pub trans_view: UnsafeCell<TransCacheView>
+    pub trans_view: UnsafeCell<TransCacheView>,
+    pub local_vers:  UnsafeCell<HashMap<u32, u64>>,
 }
 
 unsafe impl Send for DpuRpcProc {}
@@ -38,6 +41,7 @@ impl DpuRpcProc {
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
             trans_view: UnsafeCell::new(TransCacheView::new(scheduler)),
+            local_vers:  UnsafeCell::new(HashMap::new())
         }
     }
 }
@@ -55,6 +59,20 @@ impl DpuRpcProc {
         if info_tid != self.tid {
             panic!("what the fuck {} , {} ", info_tid, self.tid);
         }
+
+        let info_ver = buf.get_header().info_ver;
+
+        let local_vers = unsafe { self.local_vers.get().as_mut().unwrap() };
+        if let Some(ver) = local_vers.get_mut(&info_cid) {
+            if *ver % 10000000 != 0 && *ver > info_ver {
+                println!("what the fuck !!! old req cid: {} ver: {}, cache_ver: {}", info_cid, info_ver, ver);
+            }
+            *ver = info_ver;
+        } else {
+            local_vers.insert(info_cid, info_ver);
+        }
+
+        debug!("local read info_cid: {}, info_ver: {}", info_cid, info_ver);
         
         let count = info_payload as usize / std::mem::size_of::<LocalReadInfoItem>();
 
@@ -84,12 +102,13 @@ impl DpuRpcProc {
         unsafe { comm_reply.append_item(DocaCommReply { success: true }); }
 
         comm_reply.set_header(DocaCommHeaderMeta{
-            info_type: doca_comm_info_type::REPLY,
-            info_id:   doca_comm_info_id::LOCAL_READ_INFO,
-            info_payload: std::mem::size_of::<DocaCommReply>() as u32,
-            info_pid: info_pid,
-            info_tid: self.tid,
-            info_cid: info_cid,
+            info_type: doca_comm_info_type::REPLY as _,
+            info_id:   doca_comm_info_id::LOCAL_READ_INFO as _,
+            info_payload: std::mem::size_of::<DocaCommReply>() as _,
+            info_pid: info_pid as _,
+            info_tid: self.tid as _,
+            info_cid: info_cid as _,
+            info_ver: info_ver as _,
         });
 
         self.scheduler.block_send_info(&mut comm_reply);
@@ -107,6 +126,19 @@ impl DpuRpcProc {
         if info_tid != self.tid {
             panic!("what the fuck {} , {} ", info_tid, self.tid);
         }
+        let info_ver = buf.get_header().info_ver;
+
+        let local_vers = unsafe { self.local_vers.get().as_mut().unwrap() };
+        if let Some(ver) = local_vers.get_mut(&info_cid) {
+            if *ver % 10000000 != 0 && *ver > info_ver {
+                println!("what the fuck !!! old req cid: {} ver: {}, cache_ver: {}", info_cid, info_ver, ver);
+            }
+            *ver = info_ver;
+        } else {
+            local_vers.insert(info_cid, info_ver);
+        }
+
+        debug!("local lock info_cid: {}, info_ver: {}", info_cid, info_ver);
         
         let count = info_payload as usize / std::mem::size_of::<LocalLockInfoItem>();
     
@@ -146,12 +178,13 @@ impl DpuRpcProc {
         unsafe { comm_reply.append_item(DocaCommReply { success: success }); }
 
         comm_reply.set_header(DocaCommHeaderMeta{
-            info_type: doca_comm_info_type::REPLY,
-            info_id:   doca_comm_info_id::LOCAL_LOCK_INFO,
-            info_payload: std::mem::size_of::<DocaCommReply>() as u32,
-            info_pid: info_pid,
-            info_tid: self.tid,
-            info_cid: info_cid,
+            info_type: doca_comm_info_type::REPLY as _,
+            info_id:   doca_comm_info_id::LOCAL_LOCK_INFO as _,
+            info_payload: std::mem::size_of::<DocaCommReply>() as _,
+            info_pid: info_pid as _,
+            info_tid: self.tid as _,
+            info_cid: info_cid as _,
+            info_ver: info_ver as _
         });
 
         self.scheduler.block_send_info(&mut comm_reply);
@@ -169,6 +202,17 @@ impl DpuRpcProc {
 
         if info_tid != self.tid {
             panic!("what the fuck {} , {} ", info_tid, self.tid);
+        }
+        let info_ver = buf.get_header().info_ver;
+
+        let local_vers = unsafe { self.local_vers.get().as_mut().unwrap() };
+        if let Some(ver) = local_vers.get_mut(&info_cid) {
+            if *ver % 10000000 != 0 && *ver > info_ver {
+                println!("what the fuck !!! old req cid: {} ver: {}, cache_ver: {}", info_cid, info_ver, ver);
+            }
+            *ver = info_ver;
+        } else {
+            local_vers.insert(info_cid, info_ver);
         }
         
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
@@ -200,12 +244,13 @@ impl DpuRpcProc {
         unsafe { comm_reply.append_item(DocaCommReply { success: success }); }
 
         comm_reply.set_header(DocaCommHeaderMeta{
-            info_type: doca_comm_info_type::REPLY,
-            info_id:   doca_comm_info_id::LOCAL_VALIDATE_INFO,
-            info_payload: std::mem::size_of::<DocaCommReply>() as u32,
-            info_pid: info_pid,
-            info_tid: self.tid,
-            info_cid: info_cid,
+            info_type: doca_comm_info_type::REPLY as _,
+            info_id:   doca_comm_info_id::LOCAL_VALIDATE_INFO as _,
+            info_payload: std::mem::size_of::<DocaCommReply>() as _,
+            info_pid: info_pid as _,
+            info_tid: self.tid as _,
+            info_cid: info_cid as _,
+            info_ver: info_ver as _,
         });
 
         self.scheduler.block_send_info(&mut comm_reply);
@@ -222,6 +267,17 @@ impl DpuRpcProc {
     ) {
         if info_tid != self.tid {
             panic!("what the fuck {} , {} ", info_tid, self.tid);
+        }
+        let info_ver = buf.get_header().info_ver;
+
+        let local_vers = unsafe { self.local_vers.get().as_mut().unwrap() };
+        if let Some(ver) = local_vers.get_mut(&info_cid) {
+            if *ver % 10000000 != 0 && *ver > info_ver {
+                println!("what the fuck !!! old req cid: {} ver: {}, cache_ver: {}", info_cid, info_ver, ver);
+            }
+            *ver = info_ver;
+        } else {
+            local_vers.insert(info_cid, info_ver);
         }
         
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
@@ -245,12 +301,13 @@ impl DpuRpcProc {
         comm_reply.set_payload(0);
 
         comm_reply.set_header(DocaCommHeaderMeta{
-            info_type: doca_comm_info_type::REPLY,
-            info_id:   doca_comm_info_id::LOCAL_RELEASE_INFO,
+            info_type: doca_comm_info_type::REPLY as _,
+            info_id:   doca_comm_info_id::LOCAL_RELEASE_INFO as _,
             info_payload: 0,
-            info_pid: info_pid,
-            info_tid: self.tid,
-            info_cid: info_cid,
+            info_pid: info_pid as _,
+            info_tid: self.tid as _,
+            info_cid: info_cid as _,
+            info_ver: info_ver as _,
         });
 
         self.scheduler.block_send_info(&mut comm_reply);
@@ -267,6 +324,17 @@ impl DpuRpcProc {
     ) {
         if info_tid != self.tid {
             panic!("what the fuck {} , {} ", info_tid, self.tid);
+        }
+        let info_ver = buf.get_header().info_ver;
+
+        let local_vers = unsafe { self.local_vers.get().as_mut().unwrap() };
+        if let Some(ver) = local_vers.get_mut(&info_cid) {
+            if *ver % 10000000 != 0 && *ver > info_ver {
+                println!("what the fuck !!! old req cid: {} ver: {}, cache_ver: {}", info_cid, info_ver, ver);
+            }
+            *ver = info_ver;
+        } else {
+            local_vers.insert(info_cid, info_ver);
         }
         
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
@@ -299,12 +367,13 @@ impl DpuRpcProc {
         comm_reply.set_payload(0);
 
         comm_reply.set_header(DocaCommHeaderMeta{
-            info_type: doca_comm_info_type::REPLY,
-            info_id:   doca_comm_info_id::LOCAL_ABORT_INFO,
+            info_type: doca_comm_info_type::REPLY as _,
+            info_id:   doca_comm_info_id::LOCAL_ABORT_INFO as _,
             info_payload: 0,
-            info_pid: info_pid,
-            info_tid: self.tid,
-            info_cid: info_cid,
+            info_pid: info_pid as _,
+            info_tid: self.tid as _,
+            info_cid: info_cid as _,
+            info_ver: info_ver as _,
         });
 
         self.scheduler.block_send_info(&mut comm_reply);
@@ -335,8 +404,6 @@ impl DpuRpcProc {
         for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<ReadReqItem>();
 
-            debug!("remote read pid: {}, cid: {}, tid: {}, read_idx: {}", meta.peer_id, meta.rpc_cid, self.tid, req_item.read_idx);
-
             let meta = self.memdb.local_get_meta(
                 req_item.table_id, 
                 req_item.key, 
@@ -360,12 +427,13 @@ impl DpuRpcProc {
         let comm_payload = comm_req.get_payload();
 
         comm_req.set_header(DocaCommHeaderMeta{
-            info_type: doca_comm_info_type::REQ,
-            info_id:   doca_comm_info_id::REMOTE_READ_INFO,
-            info_payload: comm_payload as u32,
+            info_type: doca_comm_info_type::REQ as _,
+            info_id:   doca_comm_info_id::REMOTE_READ_INFO as _,
+            info_payload: comm_payload as _,
             info_pid: meta.peer_id as _,
-            info_tid: self.tid,
-            info_cid: meta.rpc_cid,
+            info_tid: self.tid as _,
+            info_cid: meta.rpc_cid as _,
+            info_ver: 0,
         });
 
         self.scheduler.block_send_info(&mut comm_req);
@@ -398,8 +466,6 @@ impl DpuRpcProc {
         for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
 
-            debug!("remote fetchwrite pid: {}, cid: {}, tid: {}, update_idx: {}", meta.peer_id, meta.rpc_cid, self.tid, req_item.update_idx);
-
             let meta = self.memdb.local_lock(
                 req_item.table_id, 
                 req_item.key, 
@@ -431,12 +497,13 @@ impl DpuRpcProc {
             let comm_payload = comm_req.get_payload();
 
             comm_req.set_header(DocaCommHeaderMeta{
-                info_type: doca_comm_info_type::REQ,
-                info_id:   doca_comm_info_id::REMOTE_FETCHWRITE_INFO,
-                info_payload: comm_payload as u32,
+                info_type: doca_comm_info_type::REQ as _,
+                info_id:   doca_comm_info_id::REMOTE_FETCHWRITE_INFO as _,
+                info_payload: comm_payload as _,
                 info_pid: meta.peer_id as _,
-                info_tid: self.tid,
-                info_cid: meta.rpc_cid,
+                info_tid: self.tid as _,
+                info_cid: meta.rpc_cid as _,
+                info_ver: 0,
             });
 
             self.scheduler.block_send_info(&mut comm_req);

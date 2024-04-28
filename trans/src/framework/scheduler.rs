@@ -77,6 +77,7 @@ pub struct AsyncScheduler {
     tid: usize,
     allocator: Mutex<RpcBufAllocator>,
     conns: HashMap<u64, Arc<Mutex<RdmaRcConn>>>,
+    vers: UnsafeCell<Vec<u32>>,
     //  read / write (one-side primitives)
     // pending for coroutines
     pendings: UnsafeCell<Vec<u32>>,
@@ -108,13 +109,17 @@ impl AsyncScheduler {
         let mut pendings = Vec::new();
         #[cfg(feature = "doca_deps")]
         let dma_meta = Vec::new();
+
+        let mut vers = Vec::new();
         for _ in 0..routine_num {
             pendings.push(0);
+            vers.push(0);
         }
         Self {
             tid: tid,
             allocator: Mutex::new(RpcBufAllocator::new(routine_num, allocator)),
             conns: HashMap::new(),
+            vers: UnsafeCell::new(vers),
             pendings: UnsafeCell::new(pendings),
             reply_metas: UnsafeCell::new(ReplyMeta::new(routine_num)),
 
@@ -442,6 +447,16 @@ impl AsyncScheduler {
         self.comm_handler = Arc::downgrade(handler) as _;
     }
 
+    pub fn alloc_new_ver(&self, cid: u32) -> u32 {
+        let vers = unsafe { self.vers.get().as_mut().unwrap() };
+        let ver = cid * 10000000 + vers[cid as usize];
+        vers[cid as usize] += 1;
+        if vers[cid as usize] > 10000000 {
+            vers[cid as usize] = 0;
+        }
+        ver
+    }
+
     #[inline]
     pub fn comm_chan_alloc_buf(&self, cid: u32) -> DocaCommBuf {
         // println!("({}){} alloc buf", self.tid,cid);
@@ -472,15 +487,15 @@ impl AsyncScheduler {
                 break;
             }
             let header = recv_buf.get_header();
-            match header.info_type {
+            match header.info_type as u32 {
                 doca_comm_info_type::REQ => {
                     self.comm_handler.upgrade().unwrap().comm_handler(
                         &recv_buf,
-                        header.info_id,
-                        header.info_payload,
-                        header.info_pid,
-                        header.info_tid,
-                        header.info_cid,
+                        header.info_id as _,
+                        header.info_payload as _,
+                        header.info_pid as _,
+                        header.info_tid as _,
+                        header.info_cid as _,
                     );
                 }
                 doca_comm_info_type::REPLY => {
@@ -490,13 +505,18 @@ impl AsyncScheduler {
                     unsafe {
                         std::ptr::copy_nonoverlapping(recv_buf.get_const_ptr(), write_ptr, header.info_payload as usize);
                     }
-                    if replys[header.info_cid as usize].get_pending_count() == 0 {
-                        println!("what the fuck? self.tid:{}, header: {:?}", self.tid, header);  
+
+                    let vers = unsafe { self.vers.get().as_mut().unwrap() };
+                    let local_ver = vers[header.info_cid as usize];
+
+                    if replys[header.info_cid as usize].get_pending_count() == 0 || local_ver as u64 != header.info_ver % 10000000 {
+                        println!("what the fuck? self.tid:{}, ver: {} , header: {:?}", self.tid, local_ver, header);  
                         for i in 0..replys.len() {
                             println!("{} pendingnum {}", i, replys[i].get_pending_count());
                         }                      
+                    } else {
+                        replys[header.info_cid as usize].append_reply(header.info_payload as usize);
                     }
-                    replys[header.info_cid as usize].append_reply(header.info_payload as usize);
                 }
                 _ => { panic!("unsupported!"); }
             }
