@@ -449,11 +449,11 @@ impl AsyncScheduler {
 
     pub fn alloc_new_ver(&self, cid: u32) -> u32 {
         let vers = unsafe { self.vers.get().as_mut().unwrap() };
-        let ver = cid * 10000000 + vers[cid as usize];
         vers[cid as usize] += 1;
         if vers[cid as usize] > 10000000 {
             vers[cid as usize] = 0;
         }
+        let ver = vers[cid as usize];
         ver
     }
 
@@ -486,6 +486,9 @@ impl AsyncScheduler {
             if res == DOCAError::DOCA_ERROR_AGAIN {
                 break;
             }
+            if res != DOCAError::DOCA_SUCCESS {
+                panic!("the connection is lost {}", self.tid);
+            }
             let header = recv_buf.get_header();
             match header.info_type as u32 {
                 doca_comm_info_type::REQ => {
@@ -509,7 +512,7 @@ impl AsyncScheduler {
                     let vers = unsafe { self.vers.get().as_mut().unwrap() };
                     let local_ver = vers[header.info_cid as usize];
 
-                    if replys[header.info_cid as usize].get_pending_count() == 0 || local_ver as u64 != header.info_ver % 10000000 {
+                    if replys[header.info_cid as usize].get_pending_count() == 0 {
                         println!("what the fuck? self.tid:{}, ver: {} , header: {:?}", self.tid, local_ver, header);  
                         for i in 0..replys.len() {
                             println!("{} pendingnum {}", i, replys[i].get_pending_count());

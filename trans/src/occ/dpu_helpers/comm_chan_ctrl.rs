@@ -71,7 +71,6 @@ impl CommChanCtrl {
                 info_pid:  self.pid as _,
                 info_tid:  self.tid as _,
                 info_cid:  self.cid as _,
-                info_ver:  self.ver as _,
             });
 
             self.scheduler.block_send_info(buf);

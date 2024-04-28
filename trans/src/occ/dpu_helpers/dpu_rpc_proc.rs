@@ -28,7 +28,7 @@ pub struct DpuRpcProc {
     pub memdb:      Arc<MemDB>,
     pub scheduler:  Arc<AsyncScheduler>,
     pub trans_view: UnsafeCell<TransCacheView>,
-    pub local_vers:  UnsafeCell<HashMap<u32, u64>>,
+    pub reply_bufs: UnsafeCell<HashMap<u32, DocaCommBuf>>
 }
 
 unsafe impl Send for DpuRpcProc {}
@@ -41,7 +41,7 @@ impl DpuRpcProc {
             memdb: memdb.clone(),
             scheduler: scheduler.clone(),
             trans_view: UnsafeCell::new(TransCacheView::new(scheduler)),
-            local_vers:  UnsafeCell::new(HashMap::new())
+            reply_bufs: UnsafeCell::new(HashMap::new())
         }
     }
 }
@@ -59,20 +59,6 @@ impl DpuRpcProc {
         if info_tid != self.tid {
             panic!("what the fuck {} , {} ", info_tid, self.tid);
         }
-
-        let info_ver = buf.get_header().info_ver;
-
-        let local_vers = unsafe { self.local_vers.get().as_mut().unwrap() };
-        if let Some(ver) = local_vers.get_mut(&info_cid) {
-            if *ver % 10000000 != 0 && *ver > info_ver {
-                println!("what the fuck !!! old req cid: {} ver: {}, cache_ver: {}", info_cid, info_ver, ver);
-            }
-            *ver = info_ver;
-        } else {
-            local_vers.insert(info_cid, info_ver);
-        }
-
-        debug!("local read info_cid: {}, info_ver: {}", info_cid, info_ver);
         
         let count = info_payload as usize / std::mem::size_of::<LocalReadInfoItem>();
 
@@ -97,7 +83,12 @@ impl DpuRpcProc {
 
         read_cache_writer.block_sync_buf(trans_view);
 
-        let mut comm_reply = self.scheduler.comm_chan_alloc_buf(0);
+        let reply_bufs = unsafe { self.reply_bufs.get().as_mut().unwrap() };
+        if let None = reply_bufs.get_mut(&info_cid) {
+            reply_bufs.insert(info_cid, self.scheduler.comm_chan_alloc_buf(0));
+        }
+
+        let comm_reply = reply_bufs.get_mut(&info_cid).unwrap();
         comm_reply.set_payload(0);
         unsafe { comm_reply.append_item(DocaCommReply { success: true }); }
 
@@ -108,11 +99,9 @@ impl DpuRpcProc {
             info_pid: info_pid as _,
             info_tid: self.tid as _,
             info_cid: info_cid as _,
-            info_ver: info_ver as _,
         });
 
-        self.scheduler.block_send_info(&mut comm_reply);
-        self.scheduler.comm_chan_dealloc_buf(comm_reply, 0);
+        self.scheduler.block_send_info(comm_reply);
     }
 
     pub fn local_lock_info_handler(
@@ -126,19 +115,6 @@ impl DpuRpcProc {
         if info_tid != self.tid {
             panic!("what the fuck {} , {} ", info_tid, self.tid);
         }
-        let info_ver = buf.get_header().info_ver;
-
-        let local_vers = unsafe { self.local_vers.get().as_mut().unwrap() };
-        if let Some(ver) = local_vers.get_mut(&info_cid) {
-            if *ver % 10000000 != 0 && *ver > info_ver {
-                println!("what the fuck !!! old req cid: {} ver: {}, cache_ver: {}", info_cid, info_ver, ver);
-            }
-            *ver = info_ver;
-        } else {
-            local_vers.insert(info_cid, info_ver);
-        }
-
-        debug!("local lock info_cid: {}, info_ver: {}", info_cid, info_ver);
         
         let count = info_payload as usize / std::mem::size_of::<LocalLockInfoItem>();
     
@@ -173,7 +149,12 @@ impl DpuRpcProc {
 
         write_cache_writer.block_sync_buf(trans_view);
 
-        let mut comm_reply = self.scheduler.comm_chan_alloc_buf(0);
+        let reply_bufs = unsafe { self.reply_bufs.get().as_mut().unwrap() };
+        if let None = reply_bufs.get_mut(&info_cid) {
+            reply_bufs.insert(info_cid, self.scheduler.comm_chan_alloc_buf(0));
+        }
+
+        let comm_reply = reply_bufs.get_mut(&info_cid).unwrap();
         comm_reply.set_payload(0);
         unsafe { comm_reply.append_item(DocaCommReply { success: success }); }
 
@@ -184,11 +165,9 @@ impl DpuRpcProc {
             info_pid: info_pid as _,
             info_tid: self.tid as _,
             info_cid: info_cid as _,
-            info_ver: info_ver as _
         });
 
-        self.scheduler.block_send_info(&mut comm_reply);
-        self.scheduler.comm_chan_dealloc_buf(comm_reply, 0);
+        self.scheduler.block_send_info(comm_reply);
     }
 
     pub fn local_validate_info_handler(
@@ -203,18 +182,7 @@ impl DpuRpcProc {
         if info_tid != self.tid {
             panic!("what the fuck {} , {} ", info_tid, self.tid);
         }
-        let info_ver = buf.get_header().info_ver;
 
-        let local_vers = unsafe { self.local_vers.get().as_mut().unwrap() };
-        if let Some(ver) = local_vers.get_mut(&info_cid) {
-            if *ver % 10000000 != 0 && *ver > info_ver {
-                println!("what the fuck !!! old req cid: {} ver: {}, cache_ver: {}", info_cid, info_ver, ver);
-            }
-            *ver = info_ver;
-        } else {
-            local_vers.insert(info_cid, info_ver);
-        }
-        
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
         let buf_count = trans_view.get_read_range_num(&trans_key);
@@ -239,7 +207,12 @@ impl DpuRpcProc {
 
         trans_view.end_read_trans(&trans_key);
 
-        let mut comm_reply = self.scheduler.comm_chan_alloc_buf(0);
+        let reply_bufs = unsafe { self.reply_bufs.get().as_mut().unwrap() };
+        if let None = reply_bufs.get_mut(&info_cid) {
+            reply_bufs.insert(info_cid, self.scheduler.comm_chan_alloc_buf(0));
+        }
+
+        let comm_reply = reply_bufs.get_mut(&info_cid).unwrap();
         comm_reply.set_payload(0);
         unsafe { comm_reply.append_item(DocaCommReply { success: success }); }
 
@@ -250,11 +223,9 @@ impl DpuRpcProc {
             info_pid: info_pid as _,
             info_tid: self.tid as _,
             info_cid: info_cid as _,
-            info_ver: info_ver as _,
         });
 
-        self.scheduler.block_send_info(&mut comm_reply);
-        self.scheduler.comm_chan_dealloc_buf(comm_reply, 0);
+        self.scheduler.block_send_info(comm_reply);
     }
 
     pub fn local_release_info_handler(
@@ -267,17 +238,6 @@ impl DpuRpcProc {
     ) {
         if info_tid != self.tid {
             panic!("what the fuck {} , {} ", info_tid, self.tid);
-        }
-        let info_ver = buf.get_header().info_ver;
-
-        let local_vers = unsafe { self.local_vers.get().as_mut().unwrap() };
-        if let Some(ver) = local_vers.get_mut(&info_cid) {
-            if *ver % 10000000 != 0 && *ver > info_ver {
-                println!("what the fuck !!! old req cid: {} ver: {}, cache_ver: {}", info_cid, info_ver, ver);
-            }
-            *ver = info_ver;
-        } else {
-            local_vers.insert(info_cid, info_ver);
         }
         
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
@@ -297,7 +257,12 @@ impl DpuRpcProc {
 
         trans_view.end_write_trans(&trans_key);
 
-        let mut comm_reply = self.scheduler.comm_chan_alloc_buf(0);
+        let reply_bufs = unsafe { self.reply_bufs.get().as_mut().unwrap() };
+        if let None = reply_bufs.get_mut(&info_cid) {
+            reply_bufs.insert(info_cid, self.scheduler.comm_chan_alloc_buf(0));
+        }
+
+        let comm_reply = reply_bufs.get_mut(&info_cid).unwrap();
         comm_reply.set_payload(0);
 
         comm_reply.set_header(DocaCommHeaderMeta{
@@ -307,11 +272,9 @@ impl DpuRpcProc {
             info_pid: info_pid as _,
             info_tid: self.tid as _,
             info_cid: info_cid as _,
-            info_ver: info_ver as _,
         });
 
-        self.scheduler.block_send_info(&mut comm_reply);
-        self.scheduler.comm_chan_dealloc_buf(comm_reply, 0);
+        self.scheduler.block_send_info(comm_reply);
     }
 
     pub fn local_abort_info_handler(
@@ -324,17 +287,6 @@ impl DpuRpcProc {
     ) {
         if info_tid != self.tid {
             panic!("what the fuck {} , {} ", info_tid, self.tid);
-        }
-        let info_ver = buf.get_header().info_ver;
-
-        let local_vers = unsafe { self.local_vers.get().as_mut().unwrap() };
-        if let Some(ver) = local_vers.get_mut(&info_cid) {
-            if *ver % 10000000 != 0 && *ver > info_ver {
-                println!("what the fuck !!! old req cid: {} ver: {}, cache_ver: {}", info_cid, info_ver, ver);
-            }
-            *ver = info_ver;
-        } else {
-            local_vers.insert(info_cid, info_ver);
         }
         
         let trans_key = TransKey::new_raw(info_pid, self.tid, info_cid);
@@ -363,7 +315,12 @@ impl DpuRpcProc {
 
         trans_view.end_write_trans(&trans_key);
 
-        let mut comm_reply = self.scheduler.comm_chan_alloc_buf(0);
+        let reply_bufs = unsafe { self.reply_bufs.get().as_mut().unwrap() };
+        if let None = reply_bufs.get_mut(&info_cid) {
+            reply_bufs.insert(info_cid, self.scheduler.comm_chan_alloc_buf(0));
+        }
+
+        let comm_reply = reply_bufs.get_mut(&info_cid).unwrap();
         comm_reply.set_payload(0);
 
         comm_reply.set_header(DocaCommHeaderMeta{
@@ -373,11 +330,9 @@ impl DpuRpcProc {
             info_pid: info_pid as _,
             info_tid: self.tid as _,
             info_cid: info_cid as _,
-            info_ver: info_ver as _,
         });
 
-        self.scheduler.block_send_info(&mut comm_reply);
-        self.scheduler.comm_chan_dealloc_buf(comm_reply, 0);
+        self.scheduler.block_send_info(comm_reply);
     }
 }
 
@@ -433,7 +388,6 @@ impl DpuRpcProc {
             info_pid: meta.peer_id as _,
             info_tid: self.tid as _,
             info_cid: meta.rpc_cid as _,
-            info_ver: 0,
         });
 
         self.scheduler.block_send_info(&mut comm_req);
@@ -503,7 +457,6 @@ impl DpuRpcProc {
                 info_pid: meta.peer_id as _,
                 info_tid: self.tid as _,
                 info_cid: meta.rpc_cid as _,
-                info_ver: 0,
             });
 
             self.scheduler.block_send_info(&mut comm_req);

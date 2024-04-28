@@ -25,9 +25,13 @@ const CONN_PORTS: [&str; 8] = ["7472\0", "7473\0", "7474\0", "7475\0", "7476\0",
 const COMM_NAMES: [&str; 8] = ["comm0\0", "comm1\0", "comm2\0", "comm3\0", "comm4\0", "comm5\0", "comm6\0", "comm7\0"];
 
 async fn init_and_run(tid: usize, valuedb: Arc<ValueDB>, rand_seed: usize, client: Arc<AsyncMutex<mpsc::Receiver<SmallBankClientReq>>>) {
-    
+    let pci_addr = if tid < 4 {
+        "af:00.0"
+    } else {
+        "af:00.1"
+    };
     // comm chan
-    let comm_chan = DocaCommChannel::new_client(COMM_NAMES[tid], "af:00.0");
+    let comm_chan = DocaCommChannel::new_client(COMM_NAMES[tid], pci_addr);
 
     // rdma conn
     let mut rdma = RdmaControl::new(0);
