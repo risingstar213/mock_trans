@@ -1,5 +1,6 @@
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, Weak};
 use std::sync::Mutex;
 
@@ -290,8 +291,13 @@ impl AsyncRpc for AsyncScheduler {
         // todo!();
         Self::prepare_msg_header(msg, rpc_id, rpc_size, rpc_cid, rpc_type);
 
-        let conn = self.conns.get(&peer_id).unwrap();
-        conn.lock()
+        let conn = self.conns.get(&peer_id);
+        if conn.is_none() {
+            panic!("{}", peer_id);
+        }
+        conn.as_ref()
+            .unwrap()
+            .lock()
             .unwrap()
             .send_pending(unsafe { msg.sub(4) as _ }, rpc_size + 4)
             .unwrap();

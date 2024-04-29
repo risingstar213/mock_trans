@@ -416,7 +416,7 @@ impl TransCacheView {
     #[inline]
     pub async fn get_write_buf(&self, key: &TransKey, idx: usize, cid: u32) -> &[CacheWriteSetItem] {
         let write_map = &self.trans_write_map;
-        let meta = write_map.get(key).unwrap().get(idx).unwrap().clone();
+        let meta: CacheMeta = write_map.get(key).unwrap().get(idx).unwrap().clone();
         drop(write_map);
         self.get_buf_slice(meta, cid).await
     }

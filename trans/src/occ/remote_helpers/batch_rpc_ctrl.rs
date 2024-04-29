@@ -128,6 +128,8 @@ impl BatchRpcCtrl
             let req_msg = &self.req_msgs[*idx];
             if req_msg.wrapper.get_off() + msg_len + 4 < MAX_REQ_SIZE {
                 msg_idx = *idx as i32;
+            } else {
+                panic!("unsupport! {} ", req_msg.wrapper.get_off() + msg_len + 4);
             }
         }
 

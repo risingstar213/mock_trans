@@ -1,2 +1,2 @@
-pub mod tpcc_new_order;
+pub mod tpcc;
 pub mod small_bank;
