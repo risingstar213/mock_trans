@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use log::{ error, debug };
 
 use crate::doca_comm_chan::comm_buf::DocaCommBuf;
 use crate::memstore::memdb::ValueDB;
@@ -297,8 +296,7 @@ impl<const MAX_ITEM_SIZE: usize> OccHost<MAX_ITEM_SIZE>
             }
 
             if item.update_idx >= self.updateset.get_len() {
-                error!("update length overflow???, cid:{}, num:{}", self.cid, num);
-                panic!();
+                panic!("update length overflow???, cid:{}, num:{}", self.cid, num);
             }
 
             let bucket = self.updateset.bucket(item.update_idx);
@@ -316,8 +314,7 @@ impl<const MAX_ITEM_SIZE: usize> OccHost<MAX_ITEM_SIZE>
             let header = wrapper.get_header();
             
             if header.cid != self.cid {
-                error!("holy shit! {}th got strange resp ! me:{}, get:{}, write: {}, num: {}", i, self.cid, header.cid, header.write, header.num);
-                panic!();
+                panic!("holy shit! {}th got strange resp ! me:{}, get:{}, write: {}, num: {}", i, self.cid, header.cid, header.write, header.num);
             }
             
             if header.write {

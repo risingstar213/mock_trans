@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Arc;
 use std::cell::UnsafeCell;
-use log::debug;
 
 use crate::doca_comm_chan::comm_buf::DocaCommBuf;
 use crate::doca_comm_chan::doca_comm_info_type;

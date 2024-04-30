@@ -1,5 +1,4 @@
 use std::sync::Arc;
-use log::debug;
 
 use crate::doca_comm_chan::comm_buf::DocaCommBuf;
 use crate::doca_comm_chan::doca_comm_info_type;
@@ -59,7 +58,6 @@ impl HostRpcProc {
                 resp_wrapper.get_extra_data_raw_ptr::<ReadCacheRespItem>(),
                 data_len as u32,
             );
-            debug!("remote read pid: {}, cid: {}, tid: {}, read_idx: {}", info_pid, info_cid, self.tid, req_item.read_idx);
             resp_wrapper.set_item(ReadCacheRespItem{
                 read_idx: req_item.read_idx,
                 length:   data_len,
@@ -112,8 +110,6 @@ impl HostRpcProc {
                 resp_wrapper.get_extra_data_raw_ptr::<FetchWriteCacheRespItem>(), 
                 data_len as u32,
             );
-
-            debug!("remote fetchwrite pid: {}, cid: {}, tid: {}, update_idx: {}", info_pid, info_cid, self.tid, req_item.update_idx);
 
             resp_wrapper.set_item(FetchWriteCacheRespItem{
                 update_idx: req_item.update_idx,

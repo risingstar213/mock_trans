@@ -4,6 +4,9 @@ pub mod loader;
 pub mod worker;
 pub mod local_client;
 
+#[cfg(feature = "doca_deps")]
+pub mod dpu_helpers;
+
 use std::sync::Arc;
 
 use crate::{framework::scheduler::AsyncScheduler, memstore::memdb::MemDB, occ::BatchRpcProc};
