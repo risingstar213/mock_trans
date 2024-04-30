@@ -58,7 +58,7 @@ const MAX_CONN_INFO_BUFS: usize = 10;
 const MAX_CONN_MSG_SIZE: usize = 2048;
 
 /////////////////// CACHE /////////////////////////////
-const MAX_LOCAL_CACHE_BUF_COUNT: usize = 32;
+const MAX_LOCAL_CACHE_BUF_COUNT: usize = 64;
 
 /////////////////// WORKER ////////////////////////////
 const MAIN_ROUTINE_ID: u32 = 0;

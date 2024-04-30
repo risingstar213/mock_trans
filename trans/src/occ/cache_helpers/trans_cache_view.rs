@@ -160,18 +160,20 @@ impl TransCacheView {
     pub fn end_read_trans(&mut self, key: &TransKey) {
         let read_map = &mut self.trans_read_map;
         let read_metas = read_map.get_mut(key).unwrap();
-        while let Some(meta) = read_metas.pop() {
-            match meta.buf {
-                CacheBuf::LocalBuf(buf) => {
-                    self.local_alloc.dealloc_buf(buf);
-                }
-                CacheBuf::RemoteBuf(buf) => {
-                    #[cfg(feature = "doca_deps")]
-                    self.scheduler.dma_dealloc_remote_buf(buf);
-                }
-            }
-        }
-        read_map.remove(key);
+        read_metas[0].count = 0;
+       
+        // while let Some(meta) = read_metas.pop() {
+        //     match meta.buf {
+        //         CacheBuf::LocalBuf(buf) => {
+        //             self.local_alloc.dealloc_buf(buf);
+        //         }
+        //         CacheBuf::RemoteBuf(buf) => {
+        //             #[cfg(feature = "doca_deps")]
+        //             self.scheduler.dma_dealloc_remote_buf(buf);
+        //         }
+        //     }
+        // }
+        // read_map.remove(key);
     }
 
     #[inline]
@@ -179,19 +181,20 @@ impl TransCacheView {
         let write_map = &mut self.trans_write_map;
 
         let write_metas =write_map.get_mut(key).unwrap();
-        while let Some(meta) = write_metas.pop() {
-            match meta.buf {
-                CacheBuf::LocalBuf(buf) => {
-                    self.local_alloc.dealloc_buf(buf);
-                }
-                CacheBuf::RemoteBuf(buf) => {
-                    #[cfg(feature = "doca_deps")]
-                    self.scheduler.dma_dealloc_remote_buf(buf);
-                }
-            }
-        }
+        write_metas[0].count = 0;
+        // while let Some(meta) = write_metas.pop() {
+        //     match meta.buf {
+        //         CacheBuf::LocalBuf(buf) => {
+        //             self.local_alloc.dealloc_buf(buf);
+        //         }
+        //         CacheBuf::RemoteBuf(buf) => {
+        //             #[cfg(feature = "doca_deps")]
+        //             self.scheduler.dma_dealloc_remote_buf(buf);
+        //         }
+        //     }
+        // }
 
-        write_map.remove(key);
+        // write_map.remove(key);
     }
 
     #[cfg(feature = "doca_deps")]
@@ -388,7 +391,6 @@ impl TransCacheView {
         // update count here is proper here ???
         read_vec.get_mut(idx).unwrap().count += dirty_count;
         let meta = read_vec.get(idx).unwrap().clone();
-        drop(read_map);
 
         self.sync_buf::<CacheReadSetItem>(meta, cid, dma_local_buf, dirty_count).await;
     }
@@ -401,7 +403,6 @@ impl TransCacheView {
         // update count here is proper here ???
         read_vec.get_mut(idx).unwrap().count += dirty_count;
         let meta = read_vec.get(idx).unwrap().clone();
-        drop(read_map);
 
         self.block_sync_buf::<CacheReadSetItem>(meta, cid, dma_local_buf, dirty_count);
     }
@@ -417,7 +418,6 @@ impl TransCacheView {
     pub async fn get_write_buf(&self, key: &TransKey, idx: usize, cid: u32) -> &[CacheWriteSetItem] {
         let write_map = &self.trans_write_map;
         let meta: CacheMeta = write_map.get(key).unwrap().get(idx).unwrap().clone();
-        drop(write_map);
         self.get_buf_slice(meta, cid).await
     }
 
@@ -425,7 +425,6 @@ impl TransCacheView {
     pub fn block_get_write_buf(&self, key: &TransKey, idx: usize, cid: u32) -> &[CacheWriteSetItem] {
         let write_map = &self.trans_write_map;
         let meta = write_map.get(key).unwrap().get(idx).unwrap().clone();
-        drop(write_map);
         self.block_get_buf_slice(meta, cid)
     }
 
@@ -462,7 +461,6 @@ impl TransCacheView {
         // update count here is proper here ???
         write_vec.get_mut(idx).unwrap().count += dirty_count;
         let meta = write_vec.get(idx).unwrap().clone();
-        drop(write_map);
 
         self.sync_buf::<CacheWriteSetItem>(meta, cid, dma_local_buf, dirty_count).await;
     }
@@ -475,7 +473,6 @@ impl TransCacheView {
         // update count here is proper here ???
         write_vec.get_mut(idx).unwrap().count += dirty_count;
         let meta = write_vec.get(idx).unwrap().clone();
-        drop(write_map);
 
         self.block_sync_buf::<CacheWriteSetItem>(meta, cid, dma_local_buf, dirty_count);
     }
