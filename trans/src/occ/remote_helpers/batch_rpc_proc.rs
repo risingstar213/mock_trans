@@ -451,7 +451,7 @@ impl BatchRpcProc {
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
 
         let trans_key = TransKey::new(self.tid, &meta);
-        println!("trasn update: {:?}", trans_key);
+        // println!("trasn update: {:?}", trans_key);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
         trans_view.start_write_trans(&trans_key);
         let mut write_cache_writer = trans_view.new_write_cache_writer(&trans_key, MAIN_ROUTINE_ID);
@@ -527,7 +527,7 @@ impl BatchRpcProc {
 
         let trans_key = TransKey::new(self.tid, &meta);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
-        println!("trasn lock: {:?}", trans_key);
+        // println!("trasn lock: {:?}", trans_key);
         trans_view.start_write_trans(&trans_key);
         let mut write_cache_writer = trans_view.new_write_cache_writer(&trans_key, MAIN_ROUTINE_ID);
 
@@ -643,7 +643,7 @@ impl BatchRpcProc {
         // let req_header = req_wrapper.get_header();
     
         let trans_key = TransKey::new(self.tid, &meta);
-        println!("trasn commit: {:?}", trans_key);
+        // println!("trasn commit: {:?}", trans_key);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
         let buf_count = trans_view.get_write_range_num(&trans_key);
     
@@ -691,7 +691,7 @@ impl BatchRpcProc {
         let resp_buf = self.scheduler.get_reply_buf(0);
 
         let trans_key = TransKey::new(self.tid, &meta);
-        println!("trasn release: {:?}", trans_key);
+        // println!("trasn release: {:?}", trans_key);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
         let buf_count = trans_view.get_write_range_num(&trans_key);
 
@@ -730,7 +730,7 @@ impl BatchRpcProc {
         let resp_buf = self.scheduler.get_reply_buf(0);
 
         let trans_key = TransKey::new(self.tid, &meta);
-        println!("trasn abort: {:?}", trans_key);
+        // println!("trasn abort: {:?}", trans_key);
         let trans_view = unsafe { self.trans_view.get().as_mut().unwrap() };
         let buf_count = trans_view.get_write_range_num(&trans_key);
 

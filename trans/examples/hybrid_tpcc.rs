@@ -10,7 +10,7 @@ use trans::common::logs::init_log;
 use trans::app::tpcc::local_client::TpccClient;
 use trans::app::tpcc::TpccClientReq;
 use trans::app::tpcc::loader::TpccLoader;
-use trans::app::tpcc::TpccWorker;
+use trans::app::tpcc::TpccHybridWorker;
 use trans::common::random::FastRandom;
 use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
@@ -50,7 +50,7 @@ async fn connect_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize, client
         .register_recv_callback(&scheduler)
         .unwrap();
 
-    let worker = Arc::new(TpccWorker::new(1, tid as _, &memdb, &scheduler));
+    let worker = Arc::new(TpccHybridWorker::new(1, tid as _, &memdb, &scheduler));
     unsafe {
         Arc::get_mut_unchecked(&mut scheduler).register_callback(&worker);
     }

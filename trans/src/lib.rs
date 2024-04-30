@@ -77,7 +77,7 @@ const SMALL_BANK_MAX_BALANCE: f64 = 50000.0;
 
 /////////////////// SMALL TPCC ////////////////////////
 pub const TPCC_NROUTINES: usize = 16;
-pub const TPCC_NTHREADS: usize = 8;
+pub const TPCC_NTHREADS: usize = 1;
 const TPCC_NPARTITIONS:  usize = 2;
 const TPCC_REMOTE_THRESHHOOD: usize = 50;
 const TPCC_SCALE: usize = 1;

@@ -156,3 +156,23 @@ impl TpccWorker {
         }
     }
 }
+
+pub struct TpccHybridWorker {
+    part_id: u64,
+    tid: u32,
+    memdb: Arc<MemDB>,
+    scheduler: Arc<AsyncScheduler>,
+    proc: BatchRpcProc
+}
+
+impl TpccHybridWorker {
+    pub fn new(part_id: u64, tid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
+        Self {
+            part_id: part_id,
+            tid: tid, 
+            scheduler: scheduler.clone(),
+            memdb: memdb.clone(),
+            proc: BatchRpcProc::new(tid, memdb, scheduler),
+        }
+    }
+}
