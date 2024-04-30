@@ -7,7 +7,7 @@ use super::utils::*;
 
 impl TpccWorker {
     pub async fn txn_new_order(&self, rand_gen: &mut FastRandom, cid: u32) {
-        let mut txn = OccRemote::<TPCC_ITEM_SIZE>::new(
+        let mut txn = OccHybrid::<TPCC_ITEM_SIZE>::new(
             self.part_id, 
             self.tid,
             cid, 

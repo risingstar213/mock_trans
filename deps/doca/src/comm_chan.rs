@@ -46,7 +46,7 @@ impl CommChannel {
             panic!("Failed to set device property");
         }
 
-        ret = unsafe { ffi::doca_comm_channel_ep_set_max_msg_size(ep, 512) };
+        ret = unsafe { ffi::doca_comm_channel_ep_set_max_msg_size(ep, 2050) };
         if ret != DOCAError::DOCA_SUCCESS {
             panic!("Failed to set max_msg_size property");
         }
@@ -110,7 +110,7 @@ impl CommChannel {
             panic!("Failed to set device property");
         }
 
-        ret = unsafe { ffi::doca_comm_channel_ep_set_max_msg_size(ep, 512) };
+        ret = unsafe { ffi::doca_comm_channel_ep_set_max_msg_size(ep, 2050) };
         if ret != DOCAError::DOCA_SUCCESS {
             panic!("Failed to set max_msg_size property");
         }
