@@ -135,19 +135,28 @@ where
         ret
     }
 
-    fn local_unlock(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta> {
+    fn local_try_unlock(&self, key: u64, lock_content: u64) {
         let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
 
         let table = self.table.read().unwrap();
         match table.get(key) {
             Some(node) => {
                 node.try_unlock(lock_content);
-                ret = Some(MemNodeMeta::new(node.get_lock(), node.get_seq()));
             }
             None => {}
         }
+    }
 
-        ret
+    fn local_unlock(&self, key: u64, lock_content: u64) {
+        let mut ret: Option<MemNodeMeta> = Some(MemNodeMeta::new(0, 0));
+
+        let table = self.table.read().unwrap();
+        match table.get(key) {
+            Some(node) => {
+                node.unlock(lock_content);
+            }
+            None => {}
+        }
     }
 
     fn local_upd_val_seq(&self, key: u64, ptr: *const u8, len: u32) -> Option<MemNodeMeta> {

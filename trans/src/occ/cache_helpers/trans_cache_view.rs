@@ -537,6 +537,7 @@ impl<'worker> ReadCacheMetaWriter {
             }
 
             self.dirty_count = 0;
+            panic!("unspported!");
         }
         self.set_item(item);
     }
@@ -558,6 +559,7 @@ impl<'worker> ReadCacheMetaWriter {
             }
 
             self.dirty_count = 0;
+            panic!("unspported!");
         }
         self.set_item(item);
     }
@@ -626,6 +628,7 @@ impl<'worker> WriteCacheMetaWriter {
             }
 
             self.dirty_count = 0;
+            panic!("unspported!");
         }
 
         self.set_item(item);
@@ -648,6 +651,7 @@ impl<'worker> WriteCacheMetaWriter {
             }
 
             self.dirty_count = 0;
+            panic!("unspported!");
         }
 
         self.set_item(item);

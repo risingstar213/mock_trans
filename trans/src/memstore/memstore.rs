@@ -98,6 +98,11 @@ where
         }
     }
 
+    pub fn unlock(&self, lock_sig: u64) -> bool {
+        self.lock.store(0, Ordering::Release);
+        true
+    }
+
     pub fn advance_seq(&self) {
         self.seq.fetch_add(2, Ordering::AcqRel);
     }
@@ -149,7 +154,8 @@ pub trait MemStore {
         lock_content: u64,
     ) -> Option<MemNodeMeta>;
     fn local_lock(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta>;
-    fn local_unlock(&self, key: u64, lock_content: u64) -> Option<MemNodeMeta>;
+    fn local_try_unlock(&self, key: u64, lock_content: u64);
+    fn local_unlock(&self, key: u64, lock_content: u64);
     // update or insert
     fn local_upd_val_seq(&self, key: u64, ptr: *const u8, len: u32) -> Option<MemNodeMeta>;
     fn local_erase(&self, key: u64) -> Option<MemNodeMeta>;

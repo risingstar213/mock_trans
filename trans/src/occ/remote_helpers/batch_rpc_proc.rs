@@ -351,7 +351,7 @@ impl BatchRpcProc {
             if req_item.insert {
                 self.memdb.local_erase(req_item.table_id, req_item.key);
             } else {
-                self.memdb.local_unlock(
+                self.memdb.local_try_unlock(
                     req_item.table_id, 
                     req_item.key, 
                     lock_content.to_content(),
@@ -744,14 +744,13 @@ impl BatchRpcProc {
                 if item.insert {
                     self.memdb.local_erase(item.table_id, item.key);
                 } else {
-                    self.memdb.local_unlock(
+                    self.memdb.local_try_unlock(
                         item.table_id, 
                         item.key, 
                         lock_content.to_content(),
                     );
                 }
                 
-                self.memdb.local_unlock(item.table_id, item.key, lock_content.to_content());
             }
         }
 

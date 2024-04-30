@@ -111,11 +111,21 @@ impl MemDB
         self.tables[table_id].local_lock(key, lock_content)
     }
 
-    pub fn local_unlock(&self, table_id: usize, key: u64, lock_content: u64) -> Option<MemNodeMeta>
+    pub fn local_try_unlock(&self, table_id: usize, key: u64, lock_content: u64)
     {
         if table_id >= self.metas.len() {
             println!("the table does not exists!");
-            return None;
+            return;
+        }
+
+        self.tables[table_id].local_try_unlock(key, lock_content)
+    }
+
+    pub fn local_unlock(&self, table_id: usize, key: u64, lock_content: u64)
+    {
+        if table_id >= self.metas.len() {
+            println!("the table does not exists!");
+            return;
         }
 
         self.tables[table_id].local_unlock(key, lock_content)
