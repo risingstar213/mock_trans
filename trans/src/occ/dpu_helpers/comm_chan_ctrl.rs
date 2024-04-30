@@ -33,7 +33,7 @@ impl CommChanCtrl {
             pid:       pid,
             tid:       tid,
             cid:       cid,
-            ver:       scheduler.alloc_new_ver(cid),
+            ver:       0,
             scheduler: scheduler.clone(),
             msg_set:  HashSet::new(),
             read_infos: Vec::new(),

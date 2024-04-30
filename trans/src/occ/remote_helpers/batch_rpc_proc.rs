@@ -739,7 +739,6 @@ impl BatchRpcProc {
         // unlock
         for i in 0..buf_count {
             let write_buf = trans_view.block_get_write_buf(&trans_key, i, 0);
-
             for item in write_buf.iter() {
                 if item.insert {
                     self.memdb.local_erase(item.table_id, item.key);

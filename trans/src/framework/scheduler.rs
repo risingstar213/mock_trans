@@ -557,18 +557,18 @@ impl AsyncScheduler {
 
     pub async fn yield_until_comm_ready(&self, cid: u32) -> bool {
         let mut count = 0;
-        let mut start = std::time::SystemTime::now();
+        // let mut start = std::time::SystemTime::now();
         loop {
 
             let comm_replys = unsafe { self.comm_replys.get().as_mut().unwrap() };
             if comm_replys[cid as usize].get_pending_count() > 0 {
-                let now = std::time::SystemTime::now();
-                let duration = now.duration_since(start).unwrap();
-                if duration.as_millis() > 5000 {
-                    println!("({})wait dpu comm too long {}, count:{} ", self.tid, cid, count);
-                    start = now;
-                    count += 1;
-                }
+                // let now = std::time::SystemTime::now();
+                // let duration = now.duration_since(start).unwrap();
+                // if duration.as_millis() > 5000 {
+                //     println!("({})wait dpu comm too long {}, count:{} ", self.tid, cid, count);
+                //     start = now;
+                //     count += 1;
+                // }
                 self.yield_now(cid).await;
             } else {
                 return comm_replys[cid as usize].get_success();
@@ -586,7 +586,7 @@ impl AsyncScheduler {
     }
 
     pub async fn yield_until_ready(&self, cid: u32) {
-        let mut start = std::time::SystemTime::now();
+        // let mut start = std::time::SystemTime::now();
         loop {
             
             let pendings = unsafe { self.pendings.get().as_ref().unwrap() };
@@ -594,12 +594,12 @@ impl AsyncScheduler {
             if pendings[cid as usize] == 0 && reply_counts[cid as usize] == 0 {
                 break;
             }
-            let now = std::time::SystemTime::now();
-            let duration = now.duration_since(start).unwrap();
-            if duration.as_millis() > 10000 {
-                println!("wait too long");
-                start = now;
-            }
+            // let now = std::time::SystemTime::now();
+            // let duration = now.duration_since(start).unwrap();
+            // if duration.as_millis() > 10000 {
+            //     println!("wait too long");
+            //     start = now;
+            // }
             self.yield_now(cid).await;
         }
     }
