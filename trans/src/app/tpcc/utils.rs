@@ -6,6 +6,7 @@ use lazy_static::lazy_static;
 
 use crate::TPCC_NPARTITIONS;
 use crate::TPCC_SCALE;
+use crate::TPCC_PART_OFFLOAD_RATIO;
 
 use crate::common::random::FastRandom;
 
@@ -77,4 +78,91 @@ pub fn warehouses_start(part_id: usize) -> usize {
 
 pub fn warehouses_end(part_id: usize) -> usize {
     (part_id + 1) * TPCC_SCALE
+}
+
+/////////////////////////////////////////////////////////
+#[inline]
+pub fn stock_id_to_part_id_hybrid_longitude(stock_id: usize, part_id: usize) -> usize {
+    let w_id = stock_id_to_warehouse_id(stock_id);
+    let i_id = stock_id_to_item_id(stock_id);
+    let p_id = warehouse_id_to_part_id(w_id);
+
+    if p_id == part_id {
+        return p_id;
+    } else if i_id % 100 >= TPCC_PART_OFFLOAD_RATIO {
+        return p_id;
+    } else {
+        return p_id + 100;
+    }
+}
+
+#[inline]
+pub fn stock_id_to_part_id_host_longitude(stock_id: usize, part_id: usize) -> usize {
+    let w_id = stock_id_to_warehouse_id(stock_id);
+    let i_id = stock_id_to_item_id(stock_id);
+    let p_id = warehouse_id_to_part_id(w_id);
+
+    if p_id != part_id {
+        return p_id;
+    } else if i_id % 100 >= TPCC_PART_OFFLOAD_RATIO {
+        return p_id;
+    } else {
+        return p_id + 100;
+    }
+}
+
+#[inline]
+pub fn dist_id_to_part_id_hybrid_longitude(d_id: usize, part_id: usize) -> usize {
+    let w_id = d_id / 10;
+    let d_local = d_id % 10;
+    let p_id = warehouse_id_to_part_id(w_id);
+
+    if p_id == part_id {
+        return p_id;
+    } else if d_local * 10 >= TPCC_PART_OFFLOAD_RATIO {
+        return p_id;
+    } else {
+        return p_id + 100;
+    }
+}
+
+#[inline]
+pub fn dist_id_to_part_id_host_longitude(d_id: usize, part_id: usize) -> usize {
+    let w_id = d_id / 10;
+    let d_local = d_id % 10;
+    let p_id = warehouse_id_to_part_id(w_id);
+
+    if p_id != part_id {
+        return p_id;
+    } else if d_local * 10 >= TPCC_PART_OFFLOAD_RATIO {
+        return p_id;
+    } else {
+        return p_id + 100;
+    }
+}
+
+#[inline]
+pub fn order_id_to_part_id_hybrid_longitude(o_id: usize, part_id: usize) -> usize {
+    let p_id = order_id_to_part_id(o_id);
+
+    if p_id == part_id {
+        return p_id;
+    } else if o_id % 100 >= TPCC_PART_OFFLOAD_RATIO {
+        return p_id;
+    } else {
+        return p_id + 100;
+    }
+}
+
+#[inline]
+pub fn order_id_to_part_id_host_longitude(o_id: usize, part_id: usize) -> usize {
+    let p_id = order_id_to_part_id(o_id);
+
+    if p_id != part_id {
+        return p_id;
+    } else if o_id % 100 >= TPCC_PART_OFFLOAD_RATIO {
+        return p_id;
+    } else {
+        return p_id + 100;
+    }
 }

@@ -2,6 +2,9 @@ pub mod utils;
 pub mod workload;
 pub mod loader;
 pub mod worker;
+pub mod worker_longitude;
+pub mod loader_longitude;
+pub mod workload_longitude;
 pub mod local_client;
 
 #[cfg(feature = "doca_deps")]
@@ -166,6 +169,46 @@ pub struct TpccHybridWorker {
 }
 
 impl TpccHybridWorker {
+    pub fn new(part_id: u64, tid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
+        Self {
+            part_id: part_id,
+            tid: tid, 
+            scheduler: scheduler.clone(),
+            memdb: memdb.clone(),
+            proc: BatchRpcProc::new(tid, memdb, scheduler),
+        }
+    }
+}
+
+pub struct TpccHybridLongitudeWorker {
+    part_id: u64,
+    tid: u32,
+    memdb: Arc<MemDB>,
+    scheduler: Arc<AsyncScheduler>,
+    proc: BatchRpcProc
+}
+
+impl TpccHybridLongitudeWorker {
+    pub fn new(part_id: u64, tid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
+        Self {
+            part_id: part_id,
+            tid: tid, 
+            scheduler: scheduler.clone(),
+            memdb: memdb.clone(),
+            proc: BatchRpcProc::new(tid, memdb, scheduler),
+        }
+    }
+}
+
+pub struct TpccHostLongitudeWorker {
+    part_id: u64,
+    tid: u32,
+    memdb: Arc<MemDB>,
+    scheduler: Arc<AsyncScheduler>,
+    proc: BatchRpcProc
+}
+
+impl TpccHostLongitudeWorker {
     pub fn new(part_id: u64, tid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             part_id: part_id,

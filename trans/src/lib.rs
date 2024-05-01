@@ -24,7 +24,7 @@ type TransResult<T> = Result<T, TransError>;
 const PEERNUMS: u64 = 2;
 
 // mem info
-const NPAGES: u64 = 256;
+const NPAGES: u64 = 512;
 const MAX_PACKET_SIZE: usize = 1024;
 
 // send recv info
@@ -37,10 +37,10 @@ const MAX_SIGNAL_PENDINGS: usize = MAX_SEND_SIZE - MAX_DOORBELL_SEND_SIZE;
 const WRID_RESERVE_BITS: usize = 8;
 
 // RPCs
-const MAX_INFLIGHT_REPLY: usize = 128;
+const MAX_INFLIGHT_REPLY: usize = 64;
 const MAX_INFLIGHT_REQS_PER_ROUTINE: usize = 8;
 const MAX_REQ_SIZE: usize = 1024;
-const MAX_RESP_SIZE: usize = 2048;
+const MAX_RESP_SIZE: usize = 4096;
 
 /////////////////// MemStore //////////////////////////
 const ROBINHOOD_SIZE:    usize = 24576;
@@ -81,3 +81,5 @@ pub const TPCC_NTHREADS: usize = 1;
 const TPCC_NPARTITIONS:  usize = 2;
 const TPCC_REMOTE_THRESHHOOD: usize = 50;
 const TPCC_SCALE: usize = 1;
+
+const TPCC_PART_OFFLOAD_RATIO: usize = 40;
