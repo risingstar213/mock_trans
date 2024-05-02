@@ -1,5 +1,4 @@
 use crate::common::random::FastRandom;
-use crate::occ::occ_hybrid::OccHybrid;
 use crate::occ::occ_trans_cache::OccTransCache;
 
 use super::*;
@@ -8,7 +7,7 @@ use super::utils::*;
 
 impl TpccHybridLongitudeWorker {
     pub async fn txn_new_order(&self, rand_gen: &mut FastRandom, cid: u32) {
-        let mut txn = OccHybrid::<TPCC_ITEM_SIZE>::new(
+        let mut txn = OccTransCache::<TPCC_ITEM_SIZE>::new(
             self.part_id, 
             self.tid,
             cid, 
@@ -89,7 +88,7 @@ impl TpccHybridLongitudeWorker {
 
 impl TpccHostLongitudeWorker {
     pub async fn txn_new_order(&self, rand_gen: &mut FastRandom, cid: u32) {
-        let mut txn = OccHybrid::<TPCC_ITEM_SIZE>::new(
+        let mut txn = OccTransCache::<TPCC_ITEM_SIZE>::new(
             self.part_id, 
             self.tid,
             cid, 

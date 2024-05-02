@@ -24,8 +24,8 @@ const CONN_PORTS: [&str; 8] = ["7472\0", "7473\0", "7474\0", "7475\0", "7476\0",
 async fn connect_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize, client: Arc<AsyncMutex<mpsc::Receiver<TpccClientReq>>>) {
     // scheduler
     let mut rdma = RdmaControl::new(1);
-    rdma.connect(0, "10.10.10.6\0", CONN_PORTS[tid]).unwrap();
     rdma.connect(100, "10.10.10.26\0", CONN_PORTS[tid]).unwrap();
+    rdma.connect(0, "10.10.10.6\0", CONN_PORTS[tid]).unwrap();
 
     let allocator = rdma.get_allocator();
     let mut scheduler = Arc::new(AsyncScheduler::new(tid, TPCC_NROUTINES as _, &allocator));
