@@ -365,6 +365,8 @@ impl DpuRpcProc {
 
         let mut fetch_items = Vec::new();
 
+        let test_hit = req_wrapper.get_item::<FetchWriteReqItem>().key % 100 <= 50;
+
         for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
 
@@ -393,8 +395,10 @@ impl DpuRpcProc {
 
         write_cache_writer.block_sync_buf(trans_view);
 
+        drop(req_wrapper);
+
         // 加锁成功，则向上递交 read 请求
-        if lock_success {
+        if lock_success && !test_hit {
             // println!("remote fetch write ");
             let payload = std::mem::size_of::<ReadReqItem>() * req_header.num as usize;
 
@@ -413,17 +417,26 @@ impl DpuRpcProc {
         // 否则，直接返回错误信息
 
         let resp_buf = self.scheduler.get_reply_buf(0);
+        let mut req_wrapper = BatchRpcReqWrapper::new(msg, size as _);
         let mut resp_wrapper = BatchRpcRespWrapper::new(resp_buf, MAX_RESP_SIZE - 4);
 
         for _ in 0..req_header.num {
             let req_item = req_wrapper.get_item::<FetchWriteReqItem>();
+
+            let item_length = if !lock_success {
+                0
+            } else if req_item.table_id == 0 {
+                110
+            } else {
+                32
+            };
             resp_wrapper.set_item(FetchWriteCacheRespItem{
                 update_idx: req_item.update_idx,
-                length: 0,
+                length: item_length,
             });
 
             req_wrapper.shift_to_next_item::<FetchWriteReqItem>(0);
-            resp_wrapper.shift_to_next_item::<FetchWriteCacheRespItem>(0);
+            resp_wrapper.shift_to_next_item::<FetchWriteCacheRespItem>(item_length);
         }
 
         resp_wrapper.set_header(BatchRpcRespHeader {

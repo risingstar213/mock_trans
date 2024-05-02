@@ -54,7 +54,7 @@ const MAX_DMA_BUF_REMOTE: usize = 128;
 const MAX_DMA_BUF_PER_ROUTINE: usize = 16;
 
 /////////////////// DOCA CONN /////////////////////////
-const MAX_CONN_INFO_BUFS: usize = 10;
+const MAX_CONN_INFO_BUFS: usize = 32;
 const MAX_CONN_MSG_SIZE: usize = 2048;
 
 /////////////////// CACHE /////////////////////////////
@@ -76,7 +76,7 @@ const SMALL_BANK_MIN_BALANCE: f64 = 10000.0;
 const SMALL_BANK_MAX_BALANCE: f64 = 50000.0;
 
 /////////////////// SMALL TPCC ////////////////////////
-pub const TPCC_NROUTINES: usize = 16;
+pub const TPCC_NROUTINES: usize = 8;
 pub const TPCC_NTHREADS: usize = 8;
 const TPCC_NPARTITIONS:  usize = 2;
 const TPCC_REMOTE_THRESHHOOD: usize = 50;

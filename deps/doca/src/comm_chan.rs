@@ -172,7 +172,8 @@ impl CommChannel {
                 panic!("unexpected, {:?}, {}", res, raw.payload);
             }
 
-            sleep(Duration::from_millis(1));
+            panic!("unexpected resend");
+            // sleep(Duration::from_millis(1));
         }
     }
 
@@ -185,10 +186,10 @@ impl CommChannel {
                 break;
             }
             if res != DOCAError::DOCA_ERROR_AGAIN {
-                panic!("unexpected");
+                panic!("unexpected, {:?}, {}", res, raw.payload);
             }
 
-            sleep(Duration::from_millis(1));
+            // sleep(Duration::from_millis(1));
         }
     }
 

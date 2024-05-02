@@ -493,16 +493,22 @@ impl AsyncScheduler {
     }
 
     pub fn poll_comm_chan(&self) {
-        let mut recv_buf = self.comm_chan_alloc_buf(0);
+        let mut recv_bufs: Vec<DocaCommBuf> = Vec::with_capacity(10);
         loop {
+            let mut recv_buf = self.comm_chan_alloc_buf(0);
             recv_buf.set_payload(MAX_CONN_MSG_SIZE);
             let res = self.comm_chan.as_ref().unwrap().recv_info(&mut recv_buf);
             if res == DOCAError::DOCA_ERROR_AGAIN {
+                self.comm_chan_dealloc_buf(recv_buf, 0);
                 break;
             }
             if res != DOCAError::DOCA_SUCCESS {
                 panic!("the connection is lost {}", self.tid);
             }
+            recv_bufs.push(recv_buf);
+        }
+        for i in 0..recv_bufs.len() {
+            let recv_buf: &mut _ = recv_bufs.get_mut(i).unwrap();
 
             recv_buf.start_read();
 
@@ -513,7 +519,7 @@ impl AsyncScheduler {
                     doca_comm_info_type::REQ => {
                         // println!("REQ({})", header.info_payload);
                         self.comm_handler.upgrade().unwrap().comm_handler(
-                            &recv_buf,
+                            recv_buf,
                             header.info_id as _,
                             header.info_payload as _,
                             header.info_pid as _,
@@ -550,7 +556,10 @@ impl AsyncScheduler {
                 recv_buf.shift_to_next_msg(header.info_payload);
             }
         }
-        self.comm_chan_dealloc_buf(recv_buf, 0);
+
+        while let Some(recv_buf) = recv_bufs.pop() {
+            self.comm_chan_dealloc_buf(recv_buf, 0);
+        }
 
         self.comm_chan.as_ref().unwrap().flush_pending_msgs();
     }

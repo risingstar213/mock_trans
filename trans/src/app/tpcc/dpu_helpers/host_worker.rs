@@ -97,9 +97,9 @@ impl TpccHostWorker {
 
     async fn main_routine(&self) {
         loop {
+            self.scheduler.poll_comm_chan();
             self.scheduler.poll_recvs();
             self.scheduler.poll_sends();
-            self.scheduler.poll_comm_chan();
 
             self.scheduler.yield_now(0).await;
         }
