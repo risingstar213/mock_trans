@@ -33,7 +33,7 @@ impl TpccLongitudeLoader {
             for j in 0..10 {
                 let d_id = j + i * 10;
 
-                if dist_id_to_part_id_host_longitude(d_id, part_id as _) != part_id as _ {
+                if dist_id_to_part_id_host_longitude(d_id, part_id as _) != part_id as usize {
                     continue;
                 }
                 memdb.local_lock(
@@ -55,7 +55,7 @@ impl TpccLongitudeLoader {
             for j in 0..10000 {
                 let s_id = make_stock_key(i, j);
 
-                if stock_id_to_part_id_host_longitude(s_id, part_id as _) != part_id as _ {
+                if stock_id_to_part_id_host_longitude(s_id, part_id as _) != part_id as usize {
                     continue;
                 }
 
@@ -120,7 +120,7 @@ impl TpccLongitudeLoader {
             for j in 0..10 {
                 let d_id = j + i * 10;
 
-                if dist_id_to_part_id_host_longitude(d_id, part_id as _) != (part_id + 100) as _ {
+                if dist_id_to_part_id_host_longitude(d_id, part_id as _) != (part_id + 100) as usize {
                     continue;
                 }
                 memdb.local_lock(
@@ -142,7 +142,7 @@ impl TpccLongitudeLoader {
             for j in 0..10000 {
                 let s_id = make_stock_key(i, j);
 
-                if stock_id_to_part_id_host_longitude(s_id, part_id as _) != (part_id + 100) as _ {
+                if stock_id_to_part_id_host_longitude(s_id, part_id as _) != (part_id + 100) as usize {
                     continue;
                 }
 

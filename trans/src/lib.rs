@@ -82,4 +82,4 @@ const TPCC_NPARTITIONS:  usize = 2;
 const TPCC_REMOTE_THRESHHOOD: usize = 50;
 const TPCC_SCALE: usize = 1;
 
-const TPCC_PART_OFFLOAD_RATIO: usize = 0;
+const TPCC_PART_OFFLOAD_RATIO: usize = 30;

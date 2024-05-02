@@ -395,6 +395,7 @@ impl DpuRpcProc {
 
         // 加锁成功，则向上递交 read 请求
         if lock_success {
+            // println!("remote fetch write ");
             let payload = std::mem::size_of::<ReadReqItem>() * req_header.num as usize;
 
             let header = DocaCommHeaderMeta{
