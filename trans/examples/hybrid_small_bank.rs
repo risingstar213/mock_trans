@@ -68,7 +68,7 @@ fn main()
     let mut rand_gen = FastRandom::new(23984543 + 0);
 
     for i in 0..SMALL_BANK_NTHREADS {
-        let (sx, rx) = mpsc::channel::<SmallBankClientReq>(32);
+        let (sx, rx) = mpsc::channel::<SmallBankClientReq>(1000);
         let sender = Arc::new(Mutex::new(sx));
         let receiver = Arc::new(AsyncMutex::new(rx));
 

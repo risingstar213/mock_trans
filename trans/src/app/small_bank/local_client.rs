@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
-use tokio::time::sleep;
+use std::thread::sleep;
 use std::time::{ Duration, SystemTime };
 
 use crate::common::random::FastRandom;
@@ -83,12 +83,15 @@ impl SmallBankClient {
             self.send_workload(&mut rand_gen).await;
             count += 1;
 
+            // if count % 1000 == 0 {
+            //     sleep(Duration::from_millis(1));
+            // }
+
             if count % 10000 == 0 {
                 let now_time = SystemTime::now();
                 let duration = now_time.duration_since(start_time).unwrap();
                 println!("{}, {}", count, duration.as_millis());
             }
-            // sleep(Duration::from_millis(1)).await;
         }
 
     }

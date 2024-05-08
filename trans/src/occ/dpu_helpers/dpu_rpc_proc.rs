@@ -365,7 +365,7 @@ impl DpuRpcProc {
 
         let mut fetch_items = Vec::new();
 
-        let test_hit = req_wrapper.get_item::<FetchWriteReqItem>().key % 100 <= 50;
+        let test_hit = false; //req_wrapper.get_item::<FetchWriteReqItem>().key % 100 <= 50;
 
         for i in 0..req_header.num {
             let req_item = req_wrapper.get_item::<FetchWriteReqItem>();

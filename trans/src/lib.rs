@@ -65,7 +65,7 @@ const MAIN_ROUTINE_ID: u32 = 0;
 
 /////////////////// Small Bank Wokeloads //////////////
 pub const SMALL_BANK_NROUTINES: usize = 8;
-pub const SMALL_BANK_NTHREADS: usize = 4;
+pub const SMALL_BANK_NTHREADS: usize = 1;
 const SMALL_BANK_NPARTITIONS:  usize = 2;
 const SMALL_BANK_DEFAULT_NACCOUNTS: usize = 1000;
 const SMALL_BANK_DEFAULT_NHOTACCOUTS: usize = 40;
@@ -77,7 +77,7 @@ const SMALL_BANK_MAX_BALANCE: f64 = 50000.0;
 
 /////////////////// SMALL TPCC ////////////////////////
 pub const TPCC_NROUTINES: usize = 8;
-pub const TPCC_NTHREADS: usize = 8;
+pub const TPCC_NTHREADS: usize = 1;
 const TPCC_NPARTITIONS:  usize = 2;
 const TPCC_REMOTE_THRESHHOOD: usize = 50;
 const TPCC_SCALE: usize = 1;
