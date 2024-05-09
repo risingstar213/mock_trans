@@ -43,7 +43,7 @@ const MAX_REQ_SIZE: usize = 1024;
 const MAX_RESP_SIZE: usize = 4096;
 
 /////////////////// MemStore //////////////////////////
-const ROBINHOOD_SIZE:    usize = 24576;
+const ROBINHOOD_SIZE:    usize = 131072;
 const ROBINHOOD_DIB_MAX: usize = 8;
 
 
@@ -67,8 +67,8 @@ const MAIN_ROUTINE_ID: u32 = 0;
 pub const SMALL_BANK_NROUTINES: usize = 8;
 pub const SMALL_BANK_NTHREADS: usize = 1;
 const SMALL_BANK_NPARTITIONS:  usize = 2;
-const SMALL_BANK_DEFAULT_NACCOUNTS: usize = 1000;
-const SMALL_BANK_DEFAULT_NHOTACCOUTS: usize = 40;
+const SMALL_BANK_DEFAULT_NACCOUNTS: usize = 100000;
+const SMALL_BANK_DEFAULT_NHOTACCOUTS: usize = 4000;
 const SMALL_BANK_SCALE: usize = 1;
 const SMALL_BANK_TX_HOT: usize = 90;
 
