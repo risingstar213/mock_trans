@@ -14,7 +14,7 @@ use crate::SMALL_BANK_SCALE;
 use crate::SMALL_BANK_TX_HOT;
 
 const fn scale_factor() -> usize {
-    return SMALL_BANK_SCALE * SMALL_BANK_NTHREADS;
+    return SMALL_BANK_SCALE;
 }
 
 pub const fn accounts_num() -> usize {
