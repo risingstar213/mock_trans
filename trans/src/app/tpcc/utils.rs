@@ -49,7 +49,7 @@ pub fn num_customers() -> usize {
 }
 
 pub fn num_items() -> usize {
-    return 10000 * TPCC_SCALE;
+    return 100000 * TPCC_SCALE;
 }
 
 pub fn num_orders() -> usize {

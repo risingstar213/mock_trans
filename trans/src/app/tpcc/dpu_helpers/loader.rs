@@ -45,7 +45,7 @@ impl TpccDpuLoader {
                 );
             }
 
-            for j in 0..10000 {
+            for j in 0..num_items() {
                 let s_id = make_stock_key(i, j);
 
                 let stock = TpccStocks::default();
@@ -113,7 +113,7 @@ impl TpccDpuLoader {
                 );
             }
 
-            for j in 0..10000 {
+            for j in 0..num_items() {
                 let s_id = make_stock_key(i, j);
                 memdb.local_lock(
                     tpcc_table_id::STOCKS_TABLE_ID, 
