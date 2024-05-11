@@ -10,6 +10,7 @@ use crate::SMALL_BANK_NTHREADS;
 use crate::SMALL_BANK_NPARTITIONS;
 use crate::SMALL_BANK_DEFAULT_NACCOUNTS;
 use crate::SMALL_BANK_DEFAULT_NHOTACCOUTS;
+use crate::SMALL_BANK_PART_OFFLOAD_RATIO;
 use crate::SMALL_BANK_SCALE;
 use crate::SMALL_BANK_TX_HOT;
 
@@ -58,4 +59,28 @@ pub fn account_to_part(account: usize) -> usize {
     // account.hash(&mut hasher);
 
     account % SMALL_BANK_NPARTITIONS
+}
+
+pub fn accout_to_part_hybrid_longitude(account: usize, part_id: usize) -> usize {
+    let p_id = account % SMALL_BANK_NPARTITIONS;
+
+    if p_id == part_id {
+        return p_id;
+    } else if account % 100 >= SMALL_BANK_PART_OFFLOAD_RATIO {
+        return p_id;
+    } else {
+        return p_id + 100;
+    }
+}
+
+pub fn accout_to_part_host_longitude(account: usize, part_id: usize) -> usize {
+    let p_id = account % SMALL_BANK_NPARTITIONS;
+
+    if p_id != part_id {
+        return p_id;
+    } else if account % 100 >= SMALL_BANK_PART_OFFLOAD_RATIO {
+        return p_id;
+    } else {
+        return p_id + 100;
+    }
 }

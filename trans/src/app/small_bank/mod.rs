@@ -3,6 +3,9 @@ pub mod workload;
 pub mod worker;
 pub mod local_client;
 pub mod loader;
+pub mod workload_longitude;
+pub mod worker_longitude;
+pub mod loader_longitude;
 
 #[cfg(feature = "doca_deps")]
 pub mod dpu_helpers;
@@ -87,6 +90,46 @@ pub struct SmallBankWorker {
 }
 
 impl SmallBankWorker {
+    pub fn new(part_id: u64, tid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
+        Self {
+            part_id: part_id,
+            tid: tid, 
+            scheduler: scheduler.clone(),
+            memdb: memdb.clone(),
+            proc: BatchRpcProc::new(tid, memdb, scheduler),
+        }
+    }
+}
+
+pub struct SmallBankHybridLongitudeWorker {
+    part_id: u64,
+    tid: u32,
+    memdb: Arc<MemDB>,
+    scheduler: Arc<AsyncScheduler>,
+    proc: BatchRpcProc,
+}
+
+impl SmallBankHybridLongitudeWorker {
+    pub fn new(part_id: u64, tid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
+        Self {
+            part_id: part_id,
+            tid: tid, 
+            scheduler: scheduler.clone(),
+            memdb: memdb.clone(),
+            proc: BatchRpcProc::new(tid, memdb, scheduler),
+        }
+    }
+}
+
+pub struct SmallBankHostLongitudeWorker {
+    part_id: u64,
+    tid: u32,
+    memdb: Arc<MemDB>,
+    scheduler: Arc<AsyncScheduler>,
+    proc: BatchRpcProc,
+}
+
+impl SmallBankHostLongitudeWorker {
     pub fn new(part_id: u64, tid: u32, memdb: &Arc<MemDB>, scheduler: &Arc<AsyncScheduler>) -> Self {
         Self {
             part_id: part_id,
