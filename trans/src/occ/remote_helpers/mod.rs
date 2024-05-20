@@ -2,7 +2,7 @@ pub mod batch_rpc_msg_wrapper;
 
 pub mod batch_rpc_ctrl;
 pub mod batch_rpc_proc;
-pub mod batch_rpc_proc_yield;
+pub mod one_side_req_ctrl;
 
 use crate::framework::rpc::*;
 

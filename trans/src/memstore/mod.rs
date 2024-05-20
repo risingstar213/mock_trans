@@ -3,6 +3,8 @@ mod bplustree_memstore;
 mod robinhood;
 mod robinhood_memstore;
 
+mod cluster_chain;
+
 mod memstore;
 mod valuestore;
 
