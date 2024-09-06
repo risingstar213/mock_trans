@@ -5,7 +5,7 @@ use tokio::sync::Mutex as AsyncMutex;
 use crate::rdma::control::RdmaControl;
 use crate::rdma::rcconn::RdmaRcConn;
 use crate::memstore::memdb::MemDB;
-use crate::SMALL_BANK_NROUTINES;
+// use crate::SMALL_BANK_NROUTINES;
 use crate::common::random::FastRandom;
 use crate::framework::worker::AsyncWorker;
 use crate::framework::scheduler::AsyncScheduler;
@@ -103,11 +103,11 @@ impl SmallBankWorker {
         }
     }
 
-    pub async fn run(self: &Arc<Self>, rand_seed: usize, client: &Arc<AsyncMutex<mpsc::Receiver<SmallBankClientReq>>>) {
+    pub async fn run(self: &Arc<Self>, rand_seed: usize, client: &Arc<AsyncMutex<mpsc::Receiver<SmallBankClientReq>>>, routine_num: usize) {
         let mut futures = Vec::new();
         let mut rand_gen = FastRandom::new(rand_seed);
         
-        for i in 1..SMALL_BANK_NROUTINES {
+        for i in 1..routine_num {
             let self_clone = self.clone();
             let seed = rand_gen.next();
             let client_clone = client.clone();

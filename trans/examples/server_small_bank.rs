@@ -47,7 +47,7 @@ async fn listen_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize, client:
     }
 
 
-    worker.run(rand_seed, &client).await;
+    worker.run(rand_seed, &client, crate::SMALL_BANK_NROUTINES).await;
 }
 
 fn main()

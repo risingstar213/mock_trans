@@ -5,7 +5,7 @@ use tokio::sync::Mutex as AsyncMutex;
 use crate::rdma::control::RdmaControl;
 use crate::rdma::rcconn::RdmaRcConn;
 use crate::memstore::memdb::MemDB;
-use crate::TPCC_NROUTINES;
+// use crate::TPCC_NROUTINES;
 use crate::common::random::FastRandom;
 use crate::framework::worker::AsyncWorker;
 use crate::framework::scheduler::AsyncScheduler;
@@ -83,11 +83,11 @@ impl TpccWorker {
         }
     }
 
-    pub async fn run(self: &Arc<Self>, rand_seed: usize, client: &Arc<AsyncMutex<mpsc::Receiver<TpccClientReq>>>) {
+    pub async fn run(self: &Arc<Self>, rand_seed: usize, client: &Arc<AsyncMutex<mpsc::Receiver<TpccClientReq>>>, routine_num: usize) {
         let mut futures = Vec::new();
         let mut rand_gen = FastRandom::new(rand_seed);
         
-        for i in 1..TPCC_NROUTINES {
+        for i in 1..routine_num {
             let self_clone = self.clone();
             let seed = rand_gen.next();
             let client_clone = client.clone();
@@ -174,11 +174,11 @@ impl TpccHybridWorker {
         }
     }
 
-    pub async fn run(self: &Arc<Self>, rand_seed: usize, client: &Arc<AsyncMutex<mpsc::Receiver<TpccClientReq>>>) {
+    pub async fn run(self: &Arc<Self>, rand_seed: usize, client: &Arc<AsyncMutex<mpsc::Receiver<TpccClientReq>>>, routine_num: usize) {
         let mut futures = Vec::new();
         let mut rand_gen = FastRandom::new(rand_seed);
         
-        for i in 1..TPCC_NROUTINES {
+        for i in 1..routine_num {
             let self_clone = self.clone();
             let seed = rand_gen.next();
             let client_clone = client.clone();

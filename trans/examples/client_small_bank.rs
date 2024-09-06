@@ -45,7 +45,7 @@ async fn connect_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize, client
         Arc::get_mut_unchecked(&mut scheduler).register_callback(&worker);
     }
 
-    worker.run(rand_seed, &client).await;
+    worker.run(rand_seed, &client, crate::SMALL_BANK_NROUTINES).await;
 }
 
 fn main()

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 use std::sync::Mutex;
 use tokio::sync::mpsc;
-use std::thread::sleep;
+use tokio::time::sleep;
 use std::time::{ Duration, SystemTime };
 
 use crate::common::random::FastRandom;
@@ -75,9 +75,9 @@ impl TpccClient {
             self.send_workload(&mut rand_gen).await;
             count += 1;
 
-            // if count % 1000 == 0 {
-            //     sleep(Duration::from_millis(1));
-            // }
+            if count % 1000 == 0 {
+                sleep(Duration::from_millis(1)).await;
+            }
 
             if count % 10000 == 0 {
                 let now_time = SystemTime::now();
