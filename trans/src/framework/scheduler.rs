@@ -92,8 +92,7 @@ pub struct AsyncScheduler {
     callback: Weak<dyn RpcHandler + Send + Sync + 'static>,
 
     // offload work
-    offload_num: AtomicU64,
-    start_time: SystemTime,
+    offload_num: Option<Arc<AtomicU64>>,
 
     #[cfg(feature = "doca_deps")]
     dma_conn: Option<Arc<Mutex<DocaDmaConn>>>,
@@ -133,8 +132,42 @@ impl AsyncScheduler {
             // callbacks
             callback: Arc::downgrade(&DEFAULT_RPC_HANDLER) as _,
 
-            offload_num: AtomicU64::new(0),
-            start_time: SystemTime::now(),
+            offload_num: None,
+            #[cfg(feature = "doca_deps")]
+            dma_conn: None,
+            #[cfg(feature = "doca_deps")]
+            dma_meta: UnsafeCell::new(dma_meta),
+            #[cfg(feature = "doca_deps")]
+            comm_chan: None,
+            #[cfg(feature = "doca_deps")]
+            comm_handler: Arc::downgrade(&DEFAULT_DOCA_CONN_HANDLER) as _,
+            #[cfg(feature = "doca_deps")]
+            comm_replys: UnsafeCell::new(Vec::new()),
+        }
+    }
+
+    pub fn new_offload(tid: usize, routine_num: u32, allocator: &Arc<RdmaBaseAllocator>, offload: Arc<AtomicU64>) -> Self {
+        let mut pendings = Vec::new();
+        #[cfg(feature = "doca_deps")]
+        let dma_meta = Vec::new();
+
+        let mut vers = Vec::new();
+        for _ in 0..routine_num {
+            pendings.push(0);
+            vers.push(0);
+        }
+        Self {
+            tid: tid,
+            allocator: Mutex::new(RpcBufAllocator::new(routine_num, allocator)),
+            conns: HashMap::new(),
+            vers: UnsafeCell::new(vers),
+            pendings: UnsafeCell::new(pendings),
+            reply_metas: UnsafeCell::new(ReplyMeta::new(routine_num)),
+
+            // callbacks
+            callback: Arc::downgrade(&DEFAULT_RPC_HANDLER) as _,
+
+            offload_num: Some(offload),
             #[cfg(feature = "doca_deps")]
             dma_conn: None,
             #[cfg(feature = "doca_deps")]
@@ -211,16 +244,8 @@ impl AsyncScheduler {
 impl RdmaRecvCallback for AsyncScheduler {
     fn rdma_recv_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8) {
         // todo!();
-        let offload_num = self.offload_num.fetch_add(1, Ordering::Release);
-        
-        unsafe {
-            let pendings = self.pendings.get().as_ref().unwrap();
-            let now_time = SystemTime::now();
-            let duration = now_time.duration_since(now_time).unwrap();
-
-            if pendings.len() == 1 && duration.as_micros() % 1000 == 0 {
-                println!("offload num: {}", offload_num);
-            }
+        if self.offload_num.is_some() {
+            self.offload_num.as_ref().unwrap().fetch_add(1, Ordering::Release);
         }
         
         let meta = RpcHeaderMeta::from_header(unsafe { *(msg as *mut u32) });

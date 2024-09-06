@@ -1,5 +1,7 @@
 #![feature(get_mut_unchecked)]
+use std::sync::atomic::AtomicU64;
 use std::sync::{ Arc, Mutex };
+use std::time::{Duration, SystemTime};
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::mpsc;
 use std::env;
@@ -22,14 +24,14 @@ use trans::memstore::memdb::MemDB;
 
 const CONN_PORTS: [&str; 8] = ["7472\0", "7473\0", "7474\0", "7475\0", "7476\0", "7477\0", "7478\0", "7479\0"];
 
-async fn smallbank_listen_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize) {
+async fn smallbank_listen_and_run(tid: usize, memdb: Arc<MemDB>, offload: Arc<AtomicU64>,rand_seed: usize) {
     // scheduler
     let mut rdma = RdmaControl::new(100);
     rdma.init("0.0.0.0\0", CONN_PORTS[tid]);
     rdma.listen_task(2);
 
     let allocator = rdma.get_allocator();
-    let mut scheduler = Arc::new(AsyncScheduler::new(tid, 1, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new_offload(tid, 1, &allocator, offload));
 
     let conn_host = rdma.get_connection(0);
     conn_host.lock().unwrap().init_and_start_recvs().unwrap();
@@ -61,6 +63,7 @@ async fn smallbank_listen_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usiz
 
 fn main_smallbank(thread_num: usize) {
     let memdb = SmallBankLongitudeLoader::new_dpudb(0);
+    let offload = Arc::new(AtomicU64::new(0));
 
     let mut rand_gen = FastRandom::new(23984543 + 1);
 
@@ -72,6 +75,7 @@ fn main_smallbank(thread_num: usize) {
 
         let rand_seed = rand_gen.next();
         let memdb_clone = memdb.clone();
+        let offload_clone = offload.clone();
 
         ths.push(std::thread::spawn(move || {
             tokio::runtime::Builder::new_current_thread()
@@ -79,25 +83,37 @@ fn main_smallbank(thread_num: usize) {
                 .build()
                 .unwrap()
                 .block_on(async move {
-                    smallbank_listen_and_run(i, memdb_clone, rand_seed).await;
+                    smallbank_listen_and_run(i, memdb_clone, offload_clone, rand_seed).await;
             });
         }));
 
     }
 
-    for th in ths {
-        th.join().unwrap();
+    let mut start_time = SystemTime::now();
+    loop {
+        let now_time = SystemTime::now();
+        if now_time.duration_since(start_time).unwrap().as_millis() > 500 {
+            start_time = now_time;
+
+            let offload_num = offload.load(std::sync::atomic::Ordering::Acquire);
+
+            println!("offload num: {}", offload_num);
+        }
     }
+
+    // for th in ths {
+    //     th.join().unwrap();
+    // }
 }
 
-async fn tpcc_listen_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize) {
+async fn tpcc_listen_and_run(tid: usize, memdb: Arc<MemDB>, offload: Arc<AtomicU64>, rand_seed: usize) {
     // scheduler
     let mut rdma = RdmaControl::new(100);
     rdma.init("0.0.0.0\0", CONN_PORTS[tid]);
     rdma.listen_task(2);
 
     let allocator = rdma.get_allocator();
-    let mut scheduler = Arc::new(AsyncScheduler::new(tid, 1, &allocator));
+    let mut scheduler = Arc::new(AsyncScheduler::new_offload(tid, 1, &allocator, offload));
 
     let conn_host = rdma.get_connection(0);
     conn_host.lock().unwrap().init_and_start_recvs().unwrap();
@@ -130,6 +146,7 @@ async fn tpcc_listen_and_run(tid: usize, memdb: Arc<MemDB>, rand_seed: usize) {
 
 fn main_tpcc(thread_num: usize) {
     let memdb = TpccLongitudeLoader::new_dpudb(0);
+    let offload = Arc::new(AtomicU64::new(0));
 
     let mut rand_gen = FastRandom::new(23984543 + 1);
 
@@ -141,6 +158,7 @@ fn main_tpcc(thread_num: usize) {
 
         let rand_seed = rand_gen.next();
         let memdb_clone = memdb.clone();
+        let offload_clone = offload.clone();
 
         ths.push(std::thread::spawn(move || {
             tokio::runtime::Builder::new_current_thread()
@@ -148,15 +166,26 @@ fn main_tpcc(thread_num: usize) {
                 .build()
                 .unwrap()
                 .block_on(async move {
-                    tpcc_listen_and_run(i, memdb_clone, rand_seed).await;
+                    tpcc_listen_and_run(i, memdb_clone, offload_clone, rand_seed).await;
             });
         }));
-
     }
 
-    for th in ths {
-        th.join().unwrap();
+    let mut start_time = SystemTime::now();
+    loop {
+        let now_time = SystemTime::now();
+        if now_time.duration_since(start_time).unwrap().as_millis() > 500 {
+            start_time = now_time;
+
+            let offload_num = offload.load(std::sync::atomic::Ordering::Acquire);
+
+            println!("offload num: {}", offload_num);
+        }
     }
+
+    // for th in ths {
+    //     th.join().unwrap();
+    // }
 }
 
 fn main() {
