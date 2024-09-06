@@ -5,3 +5,4 @@ bins/
 .vscode/
 
 **/*.log
+nohup.out

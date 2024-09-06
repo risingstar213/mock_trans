@@ -56,7 +56,7 @@ fn main()
     init_log(log_path.as_path());
     
     let memdb = TpccLoader::new_memdb(1);
-    let mut sb_client = TpccClient::new();
+    let mut sb_client = TpccClient::new(crate::TPCC_NTHREADS, crate::TPCC_NROUTINES);
 
     let mut rand_gen = FastRandom::new(23984543 + 1);
 

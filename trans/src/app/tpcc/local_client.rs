@@ -12,6 +12,8 @@ use super::TpccWorkLoadId;
 // different 
 pub struct TpccClient {
     senders: Vec<Arc<Mutex<mpsc::Sender<TpccClientReq>>>>,
+    thread_num: usize,
+    coroutine_num: usize,
 }
 
 const SMALL_BANK_WORKLOAD_MIX: [usize; 6] = [25, 15, 15, 15, 15, 15];
@@ -28,9 +30,11 @@ const fn get_workload_mix_sum() -> usize {
 }
 
 impl TpccClient {
-    pub fn new() -> Self {
+    pub fn new(thread_num: usize, coroutine_num: usize) -> Self {
         Self {
             senders: Vec::new(),
+            thread_num,
+            coroutine_num,
         }
     }
 
@@ -69,20 +73,27 @@ impl TpccClient {
 
     pub async fn work_loop(&self, rand_seed: usize) {
         let mut count = 0;
-        let start_time = SystemTime::now();
+        let mut start_time = SystemTime::now();
         let mut rand_gen = FastRandom::new(rand_seed);
         loop {
             self.send_workload(&mut rand_gen).await;
             count += 1;
 
-            if count % 1000 == 0 {
-                sleep(Duration::from_millis(1)).await;
+            // if count % 1000 == 0 {
+            //     sleep(Duration::from_millis(1)).await;
+            // }
+
+            if count == 10000 {
+                start_time = SystemTime::now();
             }
 
-            if count % 10000 == 0 {
+            if count % 50000 == 0 {
                 let now_time = SystemTime::now();
                 let duration = now_time.duration_since(start_time).unwrap();
-                println!("{}, {}", count, duration.as_millis());
+                let us = duration.as_micros();
+                let thoughtput = (count as f64 * 10.0 ) / (us as f64);
+                let latency = (self.thread_num as f64 * us as f64 * 10.0) / (count as f64);
+                println!("thoughtput: {} 10^6 txn/s, latency: {} us", thoughtput, latency);
             }
         }
 

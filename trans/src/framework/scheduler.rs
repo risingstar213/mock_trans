@@ -1,8 +1,10 @@
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use std::fmt;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 use std::sync::Mutex;
+use std::time::{Duration, SystemTime};
 
 use crate::doca_dma::{DmaLocalBuf, DmaRemoteBuf};
 use crate::rdma::RdmaBaseAllocator;
@@ -89,6 +91,10 @@ pub struct AsyncScheduler {
     // callbacks
     callback: Weak<dyn RpcHandler + Send + Sync + 'static>,
 
+    // offload work
+    offload_num: AtomicU64,
+    start_time: SystemTime,
+
     #[cfg(feature = "doca_deps")]
     dma_conn: Option<Arc<Mutex<DocaDmaConn>>>,
     #[cfg(feature = "doca_deps")]
@@ -127,6 +133,8 @@ impl AsyncScheduler {
             // callbacks
             callback: Arc::downgrade(&DEFAULT_RPC_HANDLER) as _,
 
+            offload_num: AtomicU64::new(0),
+            start_time: SystemTime::now(),
             #[cfg(feature = "doca_deps")]
             dma_conn: None,
             #[cfg(feature = "doca_deps")]
@@ -203,6 +211,18 @@ impl AsyncScheduler {
 impl RdmaRecvCallback for AsyncScheduler {
     fn rdma_recv_handler(&self, src_conn: &mut RdmaRcConn, msg: *mut u8) {
         // todo!();
+        let offload_num = self.offload_num.fetch_add(1, Ordering::Release);
+        
+        unsafe {
+            let pendings = self.pendings.get().as_ref().unwrap();
+            let now_time = SystemTime::now();
+            let duration = now_time.duration_since(now_time).unwrap();
+
+            if pendings.len() == 1 && duration.as_micros() % 1000 == 0 {
+                println!("offload num: {}", offload_num);
+            }
+        }
+        
         let meta = RpcHeaderMeta::from_header(unsafe { *(msg as *mut u32) });
 
         match meta.rpc_type {

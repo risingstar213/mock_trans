@@ -66,7 +66,7 @@ async fn smallbank_connect_and_run(
 
 fn main_smallbank(thread_num: usize, coroutine_num: usize) {
     let memdb = SmallBankLongitudeLoader::new_hostdb(0);
-    let mut sb_client = SmallBankClient::new();
+    let mut sb_client = SmallBankClient::new(thread_num, coroutine_num);
 
     let mut rand_gen = FastRandom::new(23984543 + 0);
 
@@ -147,7 +147,7 @@ async fn tpcc_connect_and_run(
 
 fn main_tpcc(thread_num: usize, coroutine_num: usize) {
     let memdb = TpccLongitudeLoader::new_hostdb(0);
-    let mut sb_client = TpccClient::new();
+    let mut sb_client = TpccClient::new(thread_num, coroutine_num);
 
     let mut rand_gen = FastRandom::new(23984543 + 0);
 

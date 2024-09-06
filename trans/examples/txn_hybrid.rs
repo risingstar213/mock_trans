@@ -1,6 +1,7 @@
 #![feature(get_mut_unchecked)]
 
 use std::sync::{ Arc, Mutex };
+use std::thread;
 use tokio::sync::Mutex as AsyncMutex;
 use tokio::sync::mpsc;
 use std::env;
@@ -10,11 +11,11 @@ use clap::{ Command, Arg };
 use trans::app::small_bank::local_client::SmallBankClient;
 use trans::app::small_bank::SmallBankClientReq;
 use trans::app::small_bank::loader::SmallBankLoader;
-use trans::app::small_bank::SmallBankWorker;
+use trans::app::small_bank::SmallBankHybridLongitudeWorker;
 use trans::app::tpcc::local_client::TpccClient;
 use trans::app::tpcc::TpccClientReq;
 use trans::app::tpcc::loader::TpccLoader;
-use trans::app::tpcc::TpccHybridWorker;
+use trans::app::tpcc::TpccHybridLongitudeWorker;
 use trans::common::random::FastRandom;
 use trans::rdma::control::RdmaControl;
 use trans::rdma::rcconn::RdmaRcConn;
@@ -58,7 +59,7 @@ async fn smallbank_connect_and_run(
         .register_recv_callback(&scheduler)
         .unwrap();
 
-    let worker = Arc::new(SmallBankWorker::new(1, tid as _, &memdb, &scheduler));
+    let worker = Arc::new(SmallBankHybridLongitudeWorker::new(1, tid as _, &memdb, &scheduler));
     unsafe {
         Arc::get_mut_unchecked(&mut scheduler).register_callback(&worker);
     }
@@ -69,7 +70,7 @@ async fn smallbank_connect_and_run(
 
 fn main_smallbank(thread_num: usize, coroutine_num: usize) {
     let memdb = SmallBankLoader::new_memdb(1);
-    let mut sb_client = SmallBankClient::new();
+    let mut sb_client = SmallBankClient::new(thread_num, coroutine_num);
 
     let mut rand_gen = FastRandom::new(23984543 + 0);
 
@@ -139,7 +140,7 @@ async fn tpcc_connect_and_run(
         .register_recv_callback(&scheduler)
         .unwrap();
 
-    let worker = Arc::new(TpccHybridWorker::new(1, tid as _, &memdb, &scheduler));
+    let worker = Arc::new(TpccHybridLongitudeWorker::new(1, tid as _, &memdb, &scheduler));
     unsafe {
         Arc::get_mut_unchecked(&mut scheduler).register_callback(&worker);
     }
@@ -149,7 +150,7 @@ async fn tpcc_connect_and_run(
 
 fn main_tpcc(thread_num: usize, coroutine_num: usize) {
     let memdb = TpccLoader::new_memdb(1);
-    let mut sb_client = TpccClient::new();
+    let mut sb_client = TpccClient::new(thread_num, coroutine_num);
 
     let mut rand_gen = FastRandom::new(23984543 + 0);
 
